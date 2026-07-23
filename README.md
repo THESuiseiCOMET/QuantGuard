@@ -18,9 +18,10 @@ The backend uses a local MySQL database named `quant_guard`.
 
    ```sql
    source src/main/resources/db/migration/V1__create_simulation_account.sql;
+   source src/main/resources/db/migration/V2__create_investment_portfolio.sql;
    ```
 
-   Flyway is not enabled yet, so these migration files are version-controlled manual SQL scripts for now. The migration script includes `USE quant_guard;`, so it can also be opened and executed directly in MySQL Workbench after the database has been created.
+   Flyway is not enabled yet, so these migration files are version-controlled manual SQL scripts for now. Each migration script includes `USE quant_guard;`, so it can also be opened and executed directly in MySQL Workbench after the database has been created.
 
 3. Copy the local configuration template:
 
@@ -44,6 +45,7 @@ The backend uses a local MySQL database named `quant_guard`.
    http://localhost:8080/api/health
    http://localhost:8080/api/database/health
    http://localhost:8080/api/accounts
+   http://localhost:8080/api/portfolios
    ```
 
 ## Project Asset Rules

@@ -27,6 +27,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(ex.getMessage()));
     }
 
+    @ExceptionHandler(BusinessRuleException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBusinessRule(BusinessRuleException ex) {
+        return ResponseEntity.badRequest().body(ApiResponse.failure(ex.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()

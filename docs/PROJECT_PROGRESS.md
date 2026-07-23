@@ -26,6 +26,10 @@ Frontend development is intentionally deferred until the user resumes and confir
    - Creates the `security_instrument` and `portfolio_position` tables.
    - Uses `USE quant_guard;`.
 
+5. `src/main/resources/db/migration/V4__create_risk_config_and_simulated_order_tables.sql`
+   - Creates the `portfolio_risk_config` and `simulated_order` tables.
+   - Uses `USE quant_guard;`.
+
 ## Completed Milestones
 
 ### Initial Backend And Simulation Accounts
@@ -67,6 +71,24 @@ Frontend development is intentionally deferred until the user resumes and confir
   - Failures: 0
   - Errors: 0
 
+### Portfolio Risk Checks And Simulated Orders
+
+- Commit: pending in current milestone.
+- Result:
+  - Added portfolio risk config for max single order amount, buy/sell switches, and reserved position ratio.
+  - Added simulated LIMIT order submission.
+  - BUY orders freeze account cash after risk checks.
+  - SELL orders freeze available position quantity after risk checks.
+  - Cash and position freeze updates use MyBatis-Plus optimistic locking through `@Version`.
+  - Failed risk checks do not create `simulated_order`.
+  - Failed risk checks do not mutate cash or position quantities.
+  - `OrderStatus.REJECTED` is reserved for future audit features and is not persisted by the V4 API flow.
+- Validation:
+  - `.\mvnw.cmd clean test`
+  - Tests run: 56
+  - Failures: 0
+  - Errors: 0
+
 ## Main APIs
 
 - `GET /api/health`
@@ -83,12 +105,20 @@ Frontend development is intentionally deferred until the user resumes and confir
 - `GET /api/instruments/{id}`
 - `GET /api/portfolios/{portfolioId}/positions`
 - `GET /api/positions/{id}`
+- `POST /api/risk-configs`
+- `GET /api/risk-configs/{id}`
+- `GET /api/portfolios/{portfolioId}/risk-config`
+- `POST /api/orders`
+- `GET /api/orders`
+- `GET /api/orders/{id}`
+- `GET /api/portfolios/{portfolioId}/orders`
 
 ## Current Limits
 
 - No frontend yet.
 - No public position write API.
-- No simulated order or trade execution yet.
+- No order execution yet.
+- No order cancellation yet.
 - No real market data.
 - No real broker integration.
 - No backtesting.
@@ -96,7 +126,6 @@ Frontend development is intentionally deferred until the user resumes and confir
 
 ## Next Recommended Backend Milestones
 
-1. Security instruments and read-only portfolio positions.
-2. Portfolio risk configuration and simulated orders.
-3. Transactional simulated trade execution, cash ledger, and trade records.
-4. Summary and query APIs.
+1. Transactional simulated trade execution, cash ledger, and trade records.
+2. Order cancellation and frozen asset release.
+3. Summary and query APIs.

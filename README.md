@@ -49,6 +49,7 @@ source src/main/resources/db/create_database.sql;
 source src/main/resources/db/migration/V1__create_simulation_account.sql;
 source src/main/resources/db/migration/V2__create_investment_portfolio.sql;
 source src/main/resources/db/migration/V3__create_instrument_and_position_tables.sql;
+source src/main/resources/db/migration/V4__create_risk_config_and_simulated_order_tables.sql;
 ```
 
 这些迁移脚本都包含：
@@ -139,6 +140,36 @@ GET /api/positions/{id}
 ```
 
 持仓目前没有公开写接口。后续只能由模拟成交服务在事务中更新，避免绕过订单和风控。
+
+风控配置：
+
+```text
+POST /api/risk-configs
+GET  /api/risk-configs/{id}
+GET  /api/portfolios/{portfolioId}/risk-config
+```
+
+模拟订单：
+
+```text
+POST /api/orders
+GET  /api/orders
+GET  /api/orders/{id}
+GET  /api/portfolios/{portfolioId}/orders
+```
+
+V4 订单规则：
+
+- 当前只支持 `LIMIT` 模拟订单；
+- BUY 订单通过风控后冻结账户可用现金；
+- SELL 订单通过风控后冻结对应组合、对应标的的可用持仓；
+- 风控失败时不创建 `simulated_order`；
+- 风控失败时不修改账户资金；
+- 风控失败时不修改持仓数量；
+- `OrderStatus.REJECTED` 仅为未来审计拒绝订单预留，V4 正常接口流程暂不持久化 REJECTED 订单；
+- V4 尚未实现订单成交；
+- V4 尚未实现订单取消；
+- V4 不接入真实行情、真实券商或实盘交易。
 
 ## 项目资产规则
 

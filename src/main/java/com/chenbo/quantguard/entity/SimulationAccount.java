@@ -3,6 +3,7 @@ package com.chenbo.quantguard.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import com.chenbo.quantguard.enums.AccountStatus;
 import com.chenbo.quantguard.enums.AccountType;
 import lombok.Data;
@@ -33,5 +34,6 @@ public class SimulationAccount {
 
     private LocalDateTime updatedAt;
 
+    @Version
     private Integer version;
 }

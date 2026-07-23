@@ -73,7 +73,7 @@ Frontend development is intentionally deferred until the user resumes and confir
 
 ### Portfolio Risk Checks And Simulated Orders
 
-- Commit: pending in current milestone.
+- Commit: `af5ebdb feat: add portfolio risk checks and simulated orders`
 - Result:
   - Added portfolio risk config for max single order amount, buy/sell switches, and reserved position ratio.
   - Added simulated LIMIT order submission.

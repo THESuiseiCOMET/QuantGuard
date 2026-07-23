@@ -55,7 +55,7 @@ Frontend development is intentionally deferred until the user resumes and confir
 
 ### Security Instruments And Read-Only Positions
 
-- Commit: pending in current milestone.
+- Commit: `7239dce feat: add security instruments and read-only positions`
 - Result:
   - Added `security_instrument` for normalized tradable instruments.
   - Added `portfolio_position` for read-only holdings under portfolios.

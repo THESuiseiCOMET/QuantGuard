@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: quant-guard-backend
+  config:
+    import: optional:application-local.yaml
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true

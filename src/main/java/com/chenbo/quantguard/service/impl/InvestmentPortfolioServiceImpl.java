@@ -34,6 +34,8 @@ public class InvestmentPortfolioServiceImpl implements InvestmentPortfolioServic
     @Override
     @Transactional
     public InvestmentPortfolioResponse create(CreateInvestmentPortfolioRequest request) {
+        String portfolioName = request.portfolioName().trim();
+        String description = request.description() == null ? null : request.description().trim();
         SimulationAccount account = simulationAccountMapper.selectById(request.accountId());
         if (account == null) {
             throw new ResourceNotFoundException("Simulation account not found");
@@ -44,7 +46,7 @@ public class InvestmentPortfolioServiceImpl implements InvestmentPortfolioServic
 
         boolean nameExists = investmentPortfolioMapper.exists(Wrappers.<InvestmentPortfolio>lambdaQuery()
                 .eq(InvestmentPortfolio::getAccountId, request.accountId())
-                .eq(InvestmentPortfolio::getPortfolioName, request.portfolioName()));
+                .eq(InvestmentPortfolio::getPortfolioName, portfolioName));
         if (nameExists) {
             throw new DuplicateResourceException("Portfolio name already exists in this account");
         }
@@ -52,9 +54,9 @@ public class InvestmentPortfolioServiceImpl implements InvestmentPortfolioServic
         LocalDateTime now = LocalDateTime.now();
         InvestmentPortfolio portfolio = new InvestmentPortfolio();
         portfolio.setAccountId(request.accountId());
-        portfolio.setPortfolioName(request.portfolioName());
+        portfolio.setPortfolioName(portfolioName);
         portfolio.setPortfolioType(request.portfolioType());
-        portfolio.setDescription(request.description());
+        portfolio.setDescription(description);
         portfolio.setStatus(AccountStatus.ACTIVE);
         portfolio.setCreatedAt(now);
         portfolio.setUpdatedAt(now);

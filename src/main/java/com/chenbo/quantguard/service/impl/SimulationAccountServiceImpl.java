@@ -29,15 +29,16 @@ public class SimulationAccountServiceImpl implements SimulationAccountService {
     @Override
     @Transactional
     public SimulationAccountResponse create(CreateSimulationAccountRequest request) {
+        String accountName = request.accountName().trim();
         boolean nameExists = simulationAccountMapper.exists(Wrappers.<SimulationAccount>lambdaQuery()
-                .eq(SimulationAccount::getAccountName, request.accountName()));
+                .eq(SimulationAccount::getAccountName, accountName));
         if (nameExists) {
             throw new DuplicateResourceException("Simulation account name already exists");
         }
 
         LocalDateTime now = LocalDateTime.now();
         SimulationAccount account = new SimulationAccount();
-        account.setAccountName(request.accountName());
+        account.setAccountName(accountName);
         account.setAccountType(request.accountType());
         account.setInitialCash(request.initialCash());
         account.setAvailableCash(request.initialCash());

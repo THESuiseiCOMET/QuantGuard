@@ -22,6 +22,10 @@ Frontend development is intentionally deferred until the user resumes and confir
    - Creates the `investment_portfolio` table.
    - Uses `USE quant_guard;`.
 
+4. `src/main/resources/db/migration/V3__create_instrument_and_position_tables.sql`
+   - Creates the `security_instrument` and `portfolio_position` tables.
+   - Uses `USE quant_guard;`.
+
 ## Completed Milestones
 
 ### Initial Backend And Simulation Accounts
@@ -36,7 +40,7 @@ Frontend development is intentionally deferred until the user resumes and confir
 
 ### API Validation Hardening And Baseline Tests
 
-- Commit: pending in current milestone.
+- Commit: `2393ee9 fix: harden API validation and add baseline tests`
 - Result:
   - Invalid JSON and invalid enum values return HTTP 400.
   - Non-numeric path parameters return HTTP 400.
@@ -46,6 +50,20 @@ Frontend development is intentionally deferred until the user resumes and confir
 - Validation:
   - `.\mvnw.cmd test`
   - Tests run: 19
+  - Failures: 0
+  - Errors: 0
+
+### Security Instruments And Read-Only Positions
+
+- Commit: pending in current milestone.
+- Result:
+  - Added `security_instrument` for normalized tradable instruments.
+  - Added `portfolio_position` for read-only holdings under portfolios.
+  - Instrument symbols and currencies are normalized to uppercase.
+  - Position write APIs are intentionally not exposed; future simulated trade execution must update positions transactionally.
+- Validation:
+  - `.\mvnw.cmd test`
+  - Tests run: 30
   - Failures: 0
   - Errors: 0
 
@@ -60,12 +78,16 @@ Frontend development is intentionally deferred until the user resumes and confir
 - `GET /api/portfolios`
 - `GET /api/portfolios/{id}`
 - `GET /api/accounts/{accountId}/portfolios`
+- `POST /api/instruments`
+- `GET /api/instruments`
+- `GET /api/instruments/{id}`
+- `GET /api/portfolios/{portfolioId}/positions`
+- `GET /api/positions/{id}`
 
 ## Current Limits
 
 - No frontend yet.
-- No security instrument module yet.
-- No holding module yet.
+- No public position write API.
 - No simulated order or trade execution yet.
 - No real market data.
 - No real broker integration.

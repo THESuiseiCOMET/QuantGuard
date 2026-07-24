@@ -5,6 +5,7 @@ import AccountsView from '@/views/accounts/AccountsView.vue'
 import PortfoliosView from '@/views/portfolios/PortfoliosView.vue'
 import PositionsView from '@/views/positions/PositionsView.vue'
 import OrdersView from '@/views/orders/OrdersView.vue'
+import TradesView from '@/views/trades/TradesView.vue'
 import RiskConfigView from '@/views/risk/RiskConfigView.vue'
 import SystemView from '@/views/system/SystemView.vue'
 import DevelopmentView from '@/views/placeholder/DevelopmentView.vue'
@@ -33,7 +34,7 @@ export const router = createRouter({
         },
         { path: 'positions', name: 'positions', component: PositionsView, meta: { title: '持仓' } },
         { path: 'orders', name: 'orders', component: OrdersView, meta: { title: '模拟订单' } },
-        { path: 'trades', name: 'trades', component: DevelopmentView, meta: { title: '成交记录' } },
+        { path: 'trades', name: 'trades', component: TradesView, meta: { title: '成交记录' } },
         {
           path: 'cash-ledger',
           name: 'cash-ledger',

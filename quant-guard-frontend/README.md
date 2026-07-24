@@ -112,18 +112,22 @@ npm run build
 - 当前组合的持仓列表；
 - 风险配置读取、创建和更新；
 - 模拟订单页面，支持按组合读取订单、读取真实证券标的、创建模拟限价订单、执行 OPEN 订单、取消 OPEN 订单，展示执行结果，并刷新真实账户资金和持仓；
-- 账户、投资组合、持仓、风险配置、证券标的和模拟订单的类型化 API 封装。
+- 成交记录页面，支持按投资组合读取模拟成交、映射订单和证券信息、方向/证券/关键字筛选，以及查看模拟成交详情；
+- 账户、投资组合、持仓、风险配置、证券标的、模拟订单和模拟成交的类型化 API 封装。
 
 尚未实现：
 
-- 独立成交记录页面；
 - 独立资金流水页面；
 - 真实行情；
+- 历史行情；
 - 历史 K 线；
 - 自动撮合；
+- 回测；
+- 策略模块；
+- 真实券商接入；
 - 浮动盈亏计算。
 
-说明：`maxPositionRatio` 当前仅保存配置，现阶段后端尚未执行最大仓位比例检查。
+说明：模拟成交价格使用订单限价，不代表真实市场价格或真实市场撮合。`maxPositionRatio` 当前仅保存配置，现阶段后端尚未执行最大仓位比例检查。
 
 ---
 
@@ -239,15 +243,19 @@ Implemented:
 - portfolio position list for the selected current portfolio;
 - risk configuration read, create, and update flows;
 - simulated order management, including portfolio-scoped order loading, real security instrument loading, simulated limit order creation, OPEN order execution, OPEN order cancellation, execution result display, and real account cash and position refreshes;
-- typed API shells for accounts, portfolios, positions, risk configuration, security instruments, and simulated orders.
+- trade records, including portfolio-scoped simulated trade loading, order and instrument mapping, side/instrument/keyword filters, and simulated trade details;
+- typed API shells for accounts, portfolios, positions, risk configuration, security instruments, simulated orders, and simulated trades.
 
 Not implemented yet:
 
-- dedicated trade record screen;
 - dedicated cash ledger screen;
 - real-time quotes;
+- historical quotes;
 - historical candlesticks;
 - automatic matching;
+- backtesting;
+- strategy modules;
+- real brokerage access;
 - floating P/L calculations.
 
-Note: order execution uses the order limit price for local simulated fills and does not represent live market matching. `maxPositionRatio` is currently stored only. The backend does not yet enforce maximum position ratio checks.
+Note: order execution uses the order limit price for local simulated fills and does not represent real market prices or live market matching. `maxPositionRatio` is currently stored only. The backend does not yet enforce maximum position ratio checks.

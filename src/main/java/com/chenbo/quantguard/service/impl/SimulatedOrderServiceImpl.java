@@ -39,6 +39,7 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
 
     private static final int MONEY_SCALE = 4;
     private static final BigDecimal ZERO = BigDecimal.ZERO;
+    private static final BigDecimal MIN_ORDER_AMOUNT = new BigDecimal("0.0001");
 
     private final SimulatedOrderMapper simulatedOrderMapper;
     private final SimulationAccountMapper simulationAccountMapper;
@@ -75,9 +76,7 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
         PortfolioRiskConfig riskConfig = requireActiveRiskConfig(request.portfolioId());
         validateLotSize(request.requestedQuantity(), instrument.getLotSize());
 
-        BigDecimal orderAmount = request.requestedQuantity()
-                .multiply(request.limitPrice())
-                .setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        BigDecimal orderAmount = calculateOrderAmount(request.requestedQuantity(), request.limitPrice());
         if (orderAmount.compareTo(riskConfig.getMaxSingleOrderAmount()) > 0) {
             throw new BusinessRuleException("Order amount exceeds max single order amount");
         }
@@ -108,7 +107,10 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
             order.setFrozenQuantity(request.requestedQuantity());
         }
 
-        simulatedOrderMapper.insert(order);
+        int insertedRows = simulatedOrderMapper.insert(order);
+        if (insertedRows != 1) {
+            throw new BusinessRuleException("Simulated order creation failed, please retry");
+        }
         return SimulatedOrderResponse.from(order);
     }
 
@@ -206,6 +208,20 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
         if (quantity.remainder(lotSize).compareTo(ZERO) != 0) {
             throw new BusinessRuleException("Requested quantity must be a multiple of lot size");
         }
+    }
+
+    private BigDecimal calculateOrderAmount(BigDecimal quantity, BigDecimal limitPrice) {
+        BigDecimal rawOrderAmount = quantity.multiply(limitPrice);
+        if (rawOrderAmount.compareTo(MIN_ORDER_AMOUNT) < 0) {
+            throw new BusinessRuleException("Order amount must be at least 0.0001");
+        }
+
+        BigDecimal orderAmount = rawOrderAmount.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+        if (orderAmount.compareTo(ZERO) <= 0) {
+            throw new BusinessRuleException("Order amount must be greater than 0");
+        }
+
+        return orderAmount;
     }
 
     private void freezeCash(SimulationAccount account, PortfolioRiskConfig riskConfig, BigDecimal orderAmount) {

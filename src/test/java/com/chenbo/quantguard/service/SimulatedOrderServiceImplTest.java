@@ -97,6 +97,49 @@ class SimulatedOrderServiceImplTest {
     }
 
     @Test
+    void buyOrderRejectsTinyAmountThatWouldRoundToZero() {
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("0.000001")), riskConfig());
+
+        assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
+                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("0.000001"), new BigDecimal("0.0001"))));
+
+        verify(simulationAccountMapper, never()).updateById(any(SimulationAccount.class));
+        verify(simulatedOrderMapper, never()).insert(any(SimulatedOrder.class));
+    }
+
+    @Test
+    void buyOrderAllowsMinimumAmount() {
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("1.000000")), riskConfig());
+        when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
+        when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenAnswer(invocation -> {
+            SimulatedOrder order = invocation.getArgument(0);
+            order.setId(102L);
+            return 1;
+        });
+
+        SimulatedOrderResponse response = simulatedOrderService.create(new CreateSimulatedOrderRequest(
+                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("1.000000"), new BigDecimal("0.0001")));
+
+        assertEquals(new BigDecimal("0.0001"), response.frozenAmount());
+    }
+
+    @Test
+    void buyOrderFreezesUsingUnifiedFourDecimalAmount() {
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("0.000001")), riskConfig());
+        when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
+        when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenAnswer(invocation -> {
+            SimulatedOrder order = invocation.getArgument(0);
+            order.setId(103L);
+            return 1;
+        });
+
+        SimulatedOrderResponse response = simulatedOrderService.create(new CreateSimulatedOrderRequest(
+                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("1.234567"), new BigDecimal("2.3456")));
+
+        assertEquals(new BigDecimal("2.8958"), response.frozenAmount());
+    }
+
+    @Test
     void buyOrderRejectsInsufficientCashWithoutCreatingOrder() {
         stubCommonBuySellState(account(new BigDecimal("100.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
 
@@ -128,6 +171,27 @@ class SimulatedOrderServiceImplTest {
         verify(portfolioPositionMapper).updateById(positionCaptor.capture());
         assertEquals(new BigDecimal("300.000000"), positionCaptor.getValue().getAvailableQuantity());
         assertEquals(new BigDecimal("200.000000"), positionCaptor.getValue().getFrozenQuantity());
+    }
+
+    @Test
+    void buyOrderRejectsWhenOrderInsertFailsAfterCashFreeze() {
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
+        when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenReturn(0);
+
+        assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
+                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));
+    }
+
+    @Test
+    void sellOrderRejectsWhenOrderInsertFailsAfterPositionFreeze() {
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        when(portfolioPositionMapper.selectOne(any())).thenReturn(position(new BigDecimal("500.000000")));
+        when(portfolioPositionMapper.updateById(any(PortfolioPosition.class))).thenReturn(1);
+        when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenReturn(0);
+
+        assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
+                1L, 1L, 1L, OrderSide.SELL, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));
     }
 
     @Test

@@ -111,12 +111,12 @@ npm run build
 - 投资组合列表、账户筛选、创建和当前组合选择；
 - 当前组合的持仓列表；
 - 风险配置读取、创建和更新；
-- 账户、投资组合和持仓的类型化 API 封装。
+- 模拟订单页面，支持按组合读取订单、读取真实证券标的、创建模拟限价订单，并展示冻结金额、冻结数量、状态和拒绝原因；
+- 账户、投资组合、持仓、风险配置、证券标的和模拟订单的类型化 API 封装。
 
 尚未实现：
 
-- 模拟订单表单；
-- 订单记录页面；
+- 订单执行与取消页面；
 - 成交记录页面；
 - 资金流水页面；
 - 真实行情；
@@ -237,12 +237,12 @@ Implemented:
 - investment portfolio list, account filter, creation, and current selection;
 - portfolio position list for the selected current portfolio;
 - risk configuration read, create, and update flows;
-- typed API shells for accounts, portfolios, and positions.
+- simulated order management, including portfolio-scoped order loading, real security instrument loading, simulated limit order creation, frozen cash/quantity display, status, and rejection reason display;
+- typed API shells for accounts, portfolios, positions, risk configuration, security instruments, and simulated orders.
 
 Not implemented yet:
 
-- simulated order form;
-- order record page;
+- order execution and cancellation screen;
 - trade record page;
 - cash ledger page;
 - real-time quotes;

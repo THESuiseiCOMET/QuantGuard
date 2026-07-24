@@ -3,6 +3,7 @@ package com.chenbo.quantguard.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import com.chenbo.quantguard.enums.OrderSide;
 import com.chenbo.quantguard.enums.OrderStatus;
 import com.chenbo.quantguard.enums.OrderType;
@@ -46,5 +47,6 @@ public class SimulatedOrder {
 
     private LocalDateTime updatedAt;
 
+    @Version
     private Integer version;
 }

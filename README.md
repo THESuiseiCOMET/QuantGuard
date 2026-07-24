@@ -50,6 +50,7 @@ source src/main/resources/db/migration/V1__create_simulation_account.sql;
 source src/main/resources/db/migration/V2__create_investment_portfolio.sql;
 source src/main/resources/db/migration/V3__create_instrument_and_position_tables.sql;
 source src/main/resources/db/migration/V4__create_risk_config_and_simulated_order_tables.sql;
+source src/main/resources/db/migration/V5__create_trade_and_cash_ledger_tables.sql;
 ```
 
 这些迁移脚本都包含：
@@ -158,6 +159,18 @@ GET  /api/orders/{id}
 GET  /api/portfolios/{portfolioId}/orders
 ```
 
+模拟成交、取消和查询：
+
+```text
+POST /api/orders/{id}/execute
+POST /api/orders/{id}/cancel
+GET  /api/trades
+GET  /api/trades/{id}
+GET  /api/orders/{orderId}/trades
+GET  /api/portfolios/{portfolioId}/trades
+GET  /api/accounts/{accountId}/cash-ledger
+```
+
 V4 订单规则：
 
 - 当前只支持 `LIMIT` 模拟订单；
@@ -183,6 +196,78 @@ V4 实际生效的风控规则：
 - SELL 可用持仓检查。
 
 `maxPositionRatio` 是未来市值风控的预留配置。当前没有真实行情和可靠市值，因此 V4 不执行最大仓位比例检查，也不会用成本价或订单价格冒充实时市值。
+
+## V5 模拟成交规则
+
+V5 只支持本地模拟的全量成交：
+
+- 只处理 `OPEN` 订单；
+- 一次性全量成交，不支持部分成交；
+- 成交价格使用订单保存的 `limitPrice`；
+- BUY 成交金额直接使用订单已有 `frozenAmount`，不重新计算另一套金额；
+- SELL 成交金额按 V4 同一规则计算为 4 位小数；
+- 这不是交易所撮合，不代表真实市场成交价；
+- 不接入真实行情；
+- 不接入真实券商；
+- 不做实盘交易。
+
+BUY 成交：
+
+- 订单状态从 `OPEN` 变为 `FILLED`；
+- 账户 `frozenCash` 减少；
+- `availableCash` 不再次减少；
+- 新建或更新对应组合、对应标的的持仓；
+- 创建 `simulated_trade`；
+- 创建 `BUY_SETTLEMENT` 资金流水。
+
+SELL 成交：
+
+- 订单状态从 `OPEN` 变为 `FILLED`；
+- 对应组合、对应标的的 `totalQuantity` 减少；
+- `frozenQuantity` 减少；
+- `availableQuantity` 不再次减少；
+- 账户 `availableCash` 增加；
+- 创建 `simulated_trade`；
+- 创建 `SELL_PROCEEDS` 资金流水。
+
+订单取消：
+
+- 只有 `OPEN` 订单可以取消；
+- BUY 取消释放冻结现金，并创建 `BUY_CANCEL_RELEASE` 资金流水；
+- SELL 取消释放冻结持仓，不创建虚假现金流水；
+- 已成交和已取消订单不能再次执行或取消。
+
+并发控制：
+
+- `SimulatedOrder.version` 使用 MyBatis-Plus `@Version`；
+- 订单执行和取消先通过乐观锁领取订单；
+- 资金和持仓更新继续使用 `@Version`；
+- 所有 `updateById` 和关键 `insert` 都检查返回值；
+- 失败时抛出运行时业务异常，由 Spring 事务回滚。
+
+## MySQL 事务集成测试计划
+
+普通命令：
+
+```powershell
+.\mvnw.cmd clean test
+```
+
+该命令只运行不依赖真实 MySQL 的单元测试和 Web 层测试。
+
+后续建议增加独立的 Testcontainers MySQL 集成测试 profile，例如：
+
+```powershell
+.\mvnw.cmd -P integration verify
+```
+
+该集成测试应验证：
+
+- BUY 执行中途失败时，订单仍为 `OPEN`，资金和持仓回滚；
+- SELL 执行中途失败时，订单、持仓和现金回滚；
+- 两个并发请求执行同一订单时，最多一个成功，且只产生一条成交记录。
+
+当前 V5 已通过 Mockito 单元测试验证异常传播和事务边界代码结构，但没有在本机真实 MySQL 或 Testcontainers 中执行数据库回滚验证。
 
 ## 项目资产规则
 

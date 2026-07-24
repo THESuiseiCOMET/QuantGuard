@@ -30,6 +30,10 @@ Frontend development is intentionally deferred until the user resumes and confir
    - Creates the `portfolio_risk_config` and `simulated_order` tables.
    - Uses `USE quant_guard;`.
 
+6. `src/main/resources/db/migration/V5__create_trade_and_cash_ledger_tables.sql`
+   - Creates the `simulated_trade` and `cash_ledger` tables.
+   - Uses `USE quant_guard;`.
+
 ## Completed Milestones
 
 ### Initial Backend And Simulation Accounts
@@ -95,6 +99,27 @@ Frontend development is intentionally deferred until the user resumes and confir
   - Failures: 0
   - Errors: 0
 
+### Transactional Simulated Trade Execution
+
+- Commit: `be1b49a feat: add transactional simulated trade execution`
+- Result:
+  - Added simulated full-fill trade execution for OPEN LIMIT orders.
+  - Added order cancellation for OPEN orders.
+  - Added `simulated_trade` and `cash_ledger` records.
+  - BUY execution uses the existing order `frozenAmount` as trade amount.
+  - SELL execution reduces frozen position quantity and increases available cash.
+  - BUY cancellation releases frozen cash and creates cash ledger.
+  - SELL cancellation restores available position quantity without fake cash ledger.
+  - `SimulatedOrder.version` now uses MyBatis-Plus optimistic locking.
+  - Execution and cancellation are transactional service methods.
+  - This is local simulation only, not real exchange matching or broker trading.
+- Validation:
+  - `.\mvnw.cmd clean test`
+  - Tests run: 77
+  - Failures: 0
+  - Errors: 0
+  - MySQL/Testcontainers transaction integration tests: not executed in this milestone.
+
 ## Main APIs
 
 - `GET /api/health`
@@ -118,13 +143,21 @@ Frontend development is intentionally deferred until the user resumes and confir
 - `GET /api/orders`
 - `GET /api/orders/{id}`
 - `GET /api/portfolios/{portfolioId}/orders`
+- `POST /api/orders/{id}/execute`
+- `POST /api/orders/{id}/cancel`
+- `GET /api/trades`
+- `GET /api/trades/{id}`
+- `GET /api/orders/{orderId}/trades`
+- `GET /api/portfolios/{portfolioId}/trades`
+- `GET /api/accounts/{accountId}/cash-ledger`
 
 ## Current Limits
 
 - No frontend yet.
 - No public position write API.
-- No order execution yet.
-- No order cancellation yet.
+- No partial fills.
+- No market orders.
+- No fees or taxes.
 - No real market data.
 - No real broker integration.
 - No backtesting.

@@ -7,6 +7,7 @@ import PositionsView from '@/views/positions/PositionsView.vue'
 import OrdersView from '@/views/orders/OrdersView.vue'
 import TradesView from '@/views/trades/TradesView.vue'
 import CashLedgerView from '@/views/cash-ledger/CashLedgerView.vue'
+import MarketDataView from '@/views/market-data/MarketDataView.vue'
 import RiskConfigView from '@/views/risk/RiskConfigView.vue'
 import SystemView from '@/views/system/SystemView.vue'
 import NotFoundView from '@/views/placeholder/NotFoundView.vue'
@@ -40,6 +41,12 @@ export const router = createRouter({
           name: 'cash-ledger',
           component: CashLedgerView,
           meta: { title: '资金流水' },
+        },
+        {
+          path: 'market-data',
+          name: 'market-data',
+          component: MarketDataView,
+          meta: { title: '行情中心' },
         },
         { path: 'risk', name: 'risk', component: RiskConfigView, meta: { title: '风险管理' } },
         { path: 'system', name: 'system', component: SystemView, meta: { title: '系统信息' } },

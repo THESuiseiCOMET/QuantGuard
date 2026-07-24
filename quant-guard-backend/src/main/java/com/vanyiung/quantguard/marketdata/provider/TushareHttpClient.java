@@ -3,6 +3,7 @@ package com.vanyiung.quantguard.marketdata.provider;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.vanyiung.quantguard.marketdata.config.MarketDataProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -22,7 +23,12 @@ public class TushareHttpClient {
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
-    public TushareHttpClient(MarketDataProperties properties, ObjectMapper objectMapper) {
+    @Autowired
+    public TushareHttpClient(MarketDataProperties properties) {
+        this(properties, new ObjectMapper());
+    }
+
+    TushareHttpClient(MarketDataProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();

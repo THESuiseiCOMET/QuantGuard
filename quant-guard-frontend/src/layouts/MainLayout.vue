@@ -43,6 +43,7 @@ import {
   Lock,
   Money,
   Monitor,
+  PieChart,
   Tickets,
   TrendCharts,
   Wallet,
@@ -58,6 +59,7 @@ const navItems = [
   { path: '/orders', label: '模拟订单', icon: Tickets },
   { path: '/trades', label: '成交记录', icon: Document },
   { path: '/cash-ledger', label: '资金流水', icon: Wallet },
+  { path: '/market-data', label: '行情中心', icon: PieChart },
   { path: '/risk', label: '风险管理', icon: Lock },
   { path: '/system', label: '系统信息', icon: Monitor },
 ]

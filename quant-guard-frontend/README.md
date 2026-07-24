@@ -114,12 +114,15 @@ npm run build
 - 模拟订单页面，支持按组合读取订单、读取真实证券标的、创建模拟限价订单、执行 OPEN 订单、取消 OPEN 订单，展示执行结果，并刷新真实账户资金和持仓；
 - 成交记录页面，支持按投资组合读取模拟成交、映射订单和证券信息、方向/证券/关键字筛选，以及查看模拟成交详情；
 - 资金流水页面，支持按账户读取本地模拟流水、按当前组合前端筛选、映射订单/成交/证券信息、正负资金变动展示、筛选汇总和流水详情；
+- 行情中心页面，支持 A 股代码批量导入预览、确认导入、历史未复权日线同步、证券列表筛选、日 K、成交量、缩放、拖动和详细 tooltip；
 - 账户、投资组合、持仓、风险配置、证券标的、模拟订单、模拟成交和资金流水的类型化 API 封装。
 
 尚未实现：
 
-- 行情中心页面；
-- 历史 K 线图表；
+- 实时行情；
+- 分钟 K 线；
+- 复权行情；
+- 技术指标；
 - 自动撮合；
 - 回测；
 - 策略模块；
@@ -130,7 +133,7 @@ npm run build
 
 说明：QuantGuard 使用用户输入的限价进行本地模拟成交，不接入真实市场撮合，不连接真实券商，也不提交真实证券订单。`maxPositionRatio` 当前仅保存配置，现阶段后端尚未执行最大仓位比例检查。
 
-后端已提供 A 股证券导入和未复权历史日线接口。行情中心页面和 K 线图表将在下一前端提交中接入。历史行情来自外部数据提供者，最新日线收盘价不是实时成交价，行情可能存在延迟、缺失或更正，QuantGuard 不提供投资建议。
+历史行情来自外部数据提供者，最新日线收盘价不是实时成交价，行情可能存在延迟、缺失或更正，QuantGuard 不提供投资建议。
 
 ---
 
@@ -248,12 +251,15 @@ Implemented:
 - simulated order management, including portfolio-scoped order loading, real security instrument loading, simulated limit order creation, OPEN order execution, OPEN order cancellation, execution result display, and real account cash and position refreshes;
 - trade records, including portfolio-scoped simulated trade loading, order and instrument mapping, side/instrument/keyword filters, and simulated trade details;
 - cash ledger records, including account-scoped simulated cash ledger loading, current-portfolio frontend filtering, order/trade/instrument mapping, signed cash delta display, filtered summaries, and ledger details;
+- market data center, including A-share import preview, confirmed import, unadjusted historical daily sync, instrument list filtering, daily candlesticks, volume bars, zooming, panning, and detailed tooltips;
 - typed API shells for accounts, portfolios, positions, risk configuration, security instruments, simulated orders, simulated trades, and cash ledger records.
 
 Not implemented yet:
 
-- market data center page;
-- historical candlestick chart;
+- real-time quotes;
+- minute-level bars;
+- adjusted prices;
+- technical indicators;
 - automatic matching;
 - backtesting;
 - strategy modules;
@@ -264,4 +270,4 @@ Not implemented yet:
 
 Note: QuantGuard uses user-entered limit prices for local simulated fills, does not connect to live market matching, does not connect to real brokers, and does not place real securities orders. `maxPositionRatio` is currently stored only. The backend does not yet enforce maximum position ratio checks.
 
-The backend now provides A-share instrument import and unadjusted historical daily price APIs. The market data center and candlestick chart will be connected in the next frontend commit. Historical market data comes from an external provider. The latest daily close is not a real-time trade price; market data may be delayed, missing, or corrected. QuantGuard does not provide investment advice.
+Historical market data comes from an external provider. The latest daily close is not a real-time trade price; market data may be delayed, missing, or corrected. QuantGuard does not provide investment advice.

@@ -47,6 +47,7 @@ QuantGuard/
 - 模拟订单页面，支持按组合读取订单、读取真实证券标的、创建模拟限价订单、执行 OPEN 订单、取消 OPEN 订单，展示执行结果，并刷新真实账户资金和持仓；
 - 成交记录页面，支持按投资组合读取模拟成交、映射订单和证券信息、方向/证券/关键字筛选，以及查看模拟成交详情；
 - 资金流水页面，支持按账户读取本地模拟流水、按当前组合前端筛选、映射订单/成交/证券信息、正负资金变动展示、筛选汇总和流水详情。
+- 行情中心页面，支持 A 股代码批量导入预览、确认导入、历史未复权日线同步、证券列表筛选、日 K、成交量、缩放、拖动和详细 tooltip。
 
 ### 技术栈
 
@@ -268,7 +269,7 @@ QuantGuard is in active development.
 
 The backend core simulation loop is implemented through simulated accounts, portfolios, instruments, orders, trades, cash ledger records, and risk checks.
 
-The frontend V1 foundation covers dashboard, simulation accounts, investment portfolios, positions, risk configuration, simulated order management, trade records, and cash ledger records. Risk configuration supports reading, creation, and updates; `maxPositionRatio` is currently stored only and is not yet enforced during order risk checks. QuantGuard uses user-entered limit prices for local simulated fills, does not connect to live market matching, does not connect to real brokers, and does not place real securities orders. Real-time quotes, historical quotes, candlesticks, automatic matching, backtesting, strategy execution, authentication/authorization, production deployment, and real brokerage access are planned for later milestones.
+The frontend V1 foundation covers dashboard, simulation accounts, investment portfolios, positions, risk configuration, simulated order management, trade records, cash ledger records, and a market data center for A-share import, historical unadjusted daily bars, daily candlesticks, volume bars, zooming, panning, and detailed tooltips. Risk configuration supports reading, creation, and updates; `maxPositionRatio` is currently stored only and is not yet enforced during order risk checks. QuantGuard uses user-entered limit prices for local simulated fills, does not connect to live market matching, does not connect to real brokers, and does not place real securities orders. Real-time quotes, minute bars, adjusted prices, automatic matching, backtesting, strategy execution, authentication/authorization, production deployment, and real brokerage access are planned for later milestones.
 
 ### Safety Notice
 

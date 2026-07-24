@@ -7,3 +7,13 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
+
+quantguard:
+  market-data:
+    provider: tushare
+    base-url: ${TUSHARE_BASE_URL:https://api.tushare.pro}
+    token: ${TUSHARE_TOKEN:}
+    default-start-date: ${MARKET_DATA_DEFAULT_START_DATE:2010-01-01}
+    auto-sync-enabled: ${MARKET_DATA_AUTO_SYNC_ENABLED:false}
+    auto-sync-cron: ${MARKET_DATA_AUTO_SYNC_CRON:0 0 18 * * MON-FRI}
+    batch-size: 20

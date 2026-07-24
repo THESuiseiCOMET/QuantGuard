@@ -23,6 +23,9 @@ QuantGuard/
 - 模拟账户；
 - 投资组合；
 - 证券标的；
+- A 股证券标的批量导入预览和确认导入；
+- 历史未复权日线行情同步、查询和同步日志；
+- 可配置的工作日自动增量行情同步，默认关闭；
 - 只读持仓查询；
 - 投资组合风险配置；
 - 模拟订单；
@@ -160,6 +163,9 @@ The backend currently includes:
 - simulation accounts;
 - investment portfolios;
 - security instruments;
+- A-share security instrument import preview and confirmation APIs;
+- unadjusted historical daily price synchronization, queries, and sync logs;
+- configurable weekday automatic incremental market-data synchronization, disabled by default;
 - read-only portfolio positions;
 - portfolio risk configuration;
 - simulated orders;

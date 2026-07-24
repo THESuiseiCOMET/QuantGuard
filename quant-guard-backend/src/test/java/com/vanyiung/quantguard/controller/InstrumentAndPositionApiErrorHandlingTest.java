@@ -2,6 +2,7 @@ package com.vanyiung.quantguard.controller;
 
 import com.vanyiung.quantguard.exception.GlobalExceptionHandler;
 import com.vanyiung.quantguard.exception.ResourceNotFoundException;
+import com.vanyiung.quantguard.service.MarketDataService;
 import com.vanyiung.quantguard.service.PortfolioPositionService;
 import com.vanyiung.quantguard.service.SecurityInstrumentService;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +28,7 @@ class InstrumentAndPositionApiErrorHandlingTest {
     private MockMvc instrumentMockMvc;
     private MockMvc positionMockMvc;
     private SecurityInstrumentService securityInstrumentService;
+    private MarketDataService marketDataService;
     private PortfolioPositionService portfolioPositionService;
 
     @BeforeEach
@@ -34,9 +36,11 @@ class InstrumentAndPositionApiErrorHandlingTest {
         LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
         securityInstrumentService = mock(SecurityInstrumentService.class);
+        marketDataService = mock(MarketDataService.class);
         portfolioPositionService = mock(PortfolioPositionService.class);
 
-        instrumentMockMvc = MockMvcBuilders.standaloneSetup(new SecurityInstrumentController(securityInstrumentService))
+        instrumentMockMvc = MockMvcBuilders
+                .standaloneSetup(new SecurityInstrumentController(securityInstrumentService, marketDataService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setValidator(validator)
                 .setMessageConverters(new JacksonJsonHttpMessageConverter())

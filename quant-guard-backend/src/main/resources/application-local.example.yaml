@@ -4,3 +4,8 @@ spring:
     url: jdbc:mysql://localhost:3306/quant_guard?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: your_mysql_password
+
+quantguard:
+  market-data:
+    token: ${TUSHARE_TOKEN:}
+    auto-sync-enabled: ${MARKET_DATA_AUTO_SYNC_ENABLED:false}

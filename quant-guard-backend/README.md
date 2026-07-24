@@ -8,6 +8,8 @@ QuantGuard（智衡量化交易与风控系统）后端是一个本地自用的 
 - 模拟账户；
 - 投资组合；
 - 证券标的；
+- A 股证券标的导入；
+- 历史未复权日线行情同步；
 - 只读持仓；
 - 模拟订单、成交、资金流水和风控。
 
@@ -19,6 +21,10 @@ QuantGuard（智衡量化交易与风控系统）后端是一个本地自用的 
 - 自动实盘下单；
 - Cookie、Token、客户端逆向或界面抓取；
 - 真实行情接入；
+- 实时行情；
+- 分钟 K 线；
+- 复权行情；
+- 技术指标；
 - 高频交易。
 
 ## 本地数据库初始化
@@ -52,6 +58,7 @@ source src/main/resources/db/migration/V3__create_instrument_and_position_tables
 source src/main/resources/db/migration/V4__create_risk_config_and_simulated_order_tables.sql;
 source src/main/resources/db/migration/V5__create_trade_and_cash_ledger_tables.sql;
 source src/main/resources/db/migration/V5_1__harden_cash_ledger.sql;
+source src/main/resources/db/migration/V6__add_historical_market_data.sql;
 ```
 
 这些迁移脚本都包含：
@@ -97,6 +104,34 @@ src/main/resources/application-local.yaml
 - 不要提交真实数据库密码；
 - 不要提交 API Key、Token、私钥、Cookie；
 - 不要提交真实交易数据或个人隐私数据。
+
+## 行情数据配置
+
+历史行情使用 Tushare Pro 官方 HTTP API。Token 只允许从本地环境变量或被 Git 忽略的本地配置读取，不能提交到仓库。
+
+PowerShell 示例：
+
+```powershell
+$env:TUSHARE_TOKEN="your-local-token"
+$env:MARKET_DATA_AUTO_SYNC_ENABLED="true"
+```
+
+默认配置：
+
+- `TUSHARE_BASE_URL` 默认 `https://api.tushare.pro`；
+- `TUSHARE_TOKEN` 默认空；
+- `MARKET_DATA_DEFAULT_START_DATE` 默认 `2010-01-01`；
+- `MARKET_DATA_AUTO_SYNC_ENABLED` 默认 `false`；
+- `MARKET_DATA_AUTO_SYNC_CRON` 默认工作日 18:00；
+- 自动同步默认关闭。
+
+Token 缺失时，后端仍可正常启动。只有调用导入或同步行情接口时才会返回明确错误：
+
+```text
+Market data provider is not configured. Please set TUSHARE_TOKEN.
+```
+
+当前行情范围只支持上交所、深交所、A 股股票、人民币、未复权日线。北交所、港股、美股、ETF、指数、分钟线、复权行情、技术指标、回测、策略和真实券商接入不在本阶段范围。
 
 ## 常用验证
 
@@ -159,7 +194,35 @@ GET  /api/accounts/{accountId}/portfolios
 POST /api/instruments
 GET  /api/instruments
 GET  /api/instruments/{id}
+POST /api/instruments/import/preview
+POST /api/instruments/import
+POST /api/instruments/{id}/daily-prices/sync
+GET  /api/instruments/{id}/daily-prices
+GET  /api/instruments/{id}/daily-prices/summary
+POST /api/market-data/daily-prices/sync
 ```
+
+股票代码导入支持：
+
+```text
+600519
+000001
+600519.SH
+000001.SZ
+SSE:600519
+SZSE:000001
+```
+
+批量输入可使用换行、英文逗号、中文逗号、分号或空格分隔。单批最多 50 个代码。裸代码仅按本阶段规则推断：`60/68/90` 开头为 SSE，`00/20/30` 开头为 SZSE。
+
+历史日线保存规则：
+
+- 价格、涨跌额、涨跌幅、成交量和成交额均使用 DECIMAL；
+- `volume_lots` 保存 Tushare 原始“手”；
+- `amount_cny` 保存人民币元，即 Tushare `amount` 千元乘以 1000；
+- `adjustment_type` 当前固定为 `NONE`；
+- `data_source` 当前为 `TUSHARE`；
+- 停牌日和无数据日期不插入空 K 线。
 
 持仓查询：
 
@@ -328,6 +391,8 @@ The current scope includes:
 - simulation accounts;
 - investment portfolios;
 - security instruments;
+- A-share security instrument import;
+- unadjusted historical daily market data synchronization;
 - read-only portfolio positions;
 - simulated orders, trades, cash ledger records, and risk control.
 
@@ -339,6 +404,9 @@ The current scope excludes:
 - automated live order placement;
 - cookie, token, client reverse engineering, or UI scraping;
 - real-time market data integration;
+- minute-level bars;
+- adjusted price data;
+- technical indicators;
 - high-frequency trading.
 
 ## Local Database Initialization
@@ -372,6 +440,7 @@ source src/main/resources/db/migration/V3__create_instrument_and_position_tables
 source src/main/resources/db/migration/V4__create_risk_config_and_simulated_order_tables.sql;
 source src/main/resources/db/migration/V5__create_trade_and_cash_ledger_tables.sql;
 source src/main/resources/db/migration/V5_1__harden_cash_ledger.sql;
+source src/main/resources/db/migration/V6__add_historical_market_data.sql;
 ```
 
 Each migration contains:
@@ -417,6 +486,34 @@ Notes:
 - do not commit real database passwords;
 - do not commit API keys, tokens, private keys, or cookies;
 - do not commit real trading data or personal private data.
+
+## Market Data Configuration
+
+Historical market data uses the official Tushare Pro HTTP API. Tokens must come from local environment variables or ignored local configuration files and must never be committed.
+
+PowerShell example:
+
+```powershell
+$env:TUSHARE_TOKEN="your-local-token"
+$env:MARKET_DATA_AUTO_SYNC_ENABLED="true"
+```
+
+Defaults:
+
+- `TUSHARE_BASE_URL` defaults to `https://api.tushare.pro`.
+- `TUSHARE_TOKEN` defaults to empty.
+- `MARKET_DATA_DEFAULT_START_DATE` defaults to `2010-01-01`.
+- `MARKET_DATA_AUTO_SYNC_ENABLED` defaults to `false`.
+- `MARKET_DATA_AUTO_SYNC_CRON` defaults to weekdays at 18:00.
+- automatic synchronization is disabled by default.
+
+The backend still starts when the token is missing. Import or synchronization calls return a clear error instead:
+
+```text
+Market data provider is not configured. Please set TUSHARE_TOKEN.
+```
+
+The current market-data scope is limited to SSE, SZSE, A-share stocks, CNY, and unadjusted daily bars. Beijing Stock Exchange, Hong Kong stocks, US stocks, ETFs, indexes, minute bars, adjusted prices, technical indicators, backtesting, strategies, and real broker access are out of scope for this phase.
 
 ## Common Validation
 
@@ -479,7 +576,35 @@ Security instruments:
 POST /api/instruments
 GET  /api/instruments
 GET  /api/instruments/{id}
+POST /api/instruments/import/preview
+POST /api/instruments/import
+POST /api/instruments/{id}/daily-prices/sync
+GET  /api/instruments/{id}/daily-prices
+GET  /api/instruments/{id}/daily-prices/summary
+POST /api/market-data/daily-prices/sync
 ```
+
+Instrument import accepts:
+
+```text
+600519
+000001
+600519.SH
+000001.SZ
+SSE:600519
+SZSE:000001
+```
+
+Batch input may be separated by newlines, English commas, Chinese commas, semicolons, or spaces. Each batch supports at most 50 codes. Bare codes are inferred only within this phase: `60/68/90` map to SSE, and `00/20/30` map to SZSE.
+
+Historical daily price storage:
+
+- prices, changes, percentage changes, volumes, and amounts use DECIMAL;
+- `volume_lots` stores the provider's original lot volume;
+- `amount_cny` stores CNY yuan, converted from Tushare `amount` in thousand yuan by multiplying by 1000;
+- `adjustment_type` is currently fixed to `NONE`;
+- `data_source` is currently `TUSHARE`;
+- suspended dates and no-data dates do not create empty bars.
 
 Portfolio positions:
 

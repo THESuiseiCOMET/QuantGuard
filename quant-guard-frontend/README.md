@@ -118,9 +118,8 @@ npm run build
 
 尚未实现：
 
-- 真实行情；
-- 历史行情；
-- 历史 K 线；
+- 行情中心页面；
+- 历史 K 线图表；
 - 自动撮合；
 - 回测；
 - 策略模块；
@@ -130,6 +129,8 @@ npm run build
 - 浮动盈亏计算。
 
 说明：QuantGuard 使用用户输入的限价进行本地模拟成交，不接入真实市场撮合，不连接真实券商，也不提交真实证券订单。`maxPositionRatio` 当前仅保存配置，现阶段后端尚未执行最大仓位比例检查。
+
+后端已提供 A 股证券导入和未复权历史日线接口。行情中心页面和 K 线图表将在下一前端提交中接入。历史行情来自外部数据提供者，最新日线收盘价不是实时成交价，行情可能存在延迟、缺失或更正，QuantGuard 不提供投资建议。
 
 ---
 
@@ -251,9 +252,8 @@ Implemented:
 
 Not implemented yet:
 
-- real-time quotes;
-- historical quotes;
-- historical candlesticks;
+- market data center page;
+- historical candlestick chart;
 - automatic matching;
 - backtesting;
 - strategy modules;
@@ -263,3 +263,5 @@ Not implemented yet:
 - floating P/L calculations.
 
 Note: QuantGuard uses user-entered limit prices for local simulated fills, does not connect to live market matching, does not connect to real brokers, and does not place real securities orders. `maxPositionRatio` is currently stored only. The backend does not yet enforce maximum position ratio checks.
+
+The backend now provides A-share instrument import and unadjusted historical daily price APIs. The market data center and candlestick chart will be connected in the next frontend commit. Historical market data comes from an external provider. The latest daily close is not a real-time trade price; market data may be delayed, missing, or corrected. QuantGuard does not provide investment advice.

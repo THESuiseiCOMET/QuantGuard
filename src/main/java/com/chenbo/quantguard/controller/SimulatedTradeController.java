@@ -5,6 +5,7 @@ import com.chenbo.quantguard.dto.CashLedgerResponse;
 import com.chenbo.quantguard.dto.ExecuteSimulatedOrderResponse;
 import com.chenbo.quantguard.dto.SimulatedOrderResponse;
 import com.chenbo.quantguard.dto.SimulatedTradeResponse;
+import com.chenbo.quantguard.exception.BusinessRuleException;
 import com.chenbo.quantguard.service.CashLedgerService;
 import com.chenbo.quantguard.service.SimulatedOrderExecutionService;
 import com.chenbo.quantguard.service.SimulatedTradeService;
@@ -37,11 +38,13 @@ public class SimulatedTradeController {
 
     @PostMapping("/orders/{id}/execute")
     public ApiResponse<ExecuteSimulatedOrderResponse> execute(@PathVariable @Positive(message = "id must be positive") Long id) {
+        requirePositive(id, "id");
         return ApiResponse.success(simulatedOrderExecutionService.execute(id));
     }
 
     @PostMapping("/orders/{id}/cancel")
     public ApiResponse<SimulatedOrderResponse> cancel(@PathVariable @Positive(message = "id must be positive") Long id) {
+        requirePositive(id, "id");
         return ApiResponse.success(simulatedOrderExecutionService.cancel(id));
     }
 
@@ -52,24 +55,34 @@ public class SimulatedTradeController {
 
     @GetMapping("/trades/{id}")
     public ApiResponse<SimulatedTradeResponse> getTradeById(@PathVariable @Positive(message = "id must be positive") Long id) {
+        requirePositive(id, "id");
         return ApiResponse.success(simulatedTradeService.getById(id));
     }
 
     @GetMapping("/orders/{orderId}/trades")
     public ApiResponse<List<SimulatedTradeResponse>> listTradesByOrderId(
             @PathVariable @Positive(message = "orderId must be positive") Long orderId) {
+        requirePositive(orderId, "orderId");
         return ApiResponse.success(simulatedTradeService.listByOrderId(orderId));
     }
 
     @GetMapping("/portfolios/{portfolioId}/trades")
     public ApiResponse<List<SimulatedTradeResponse>> listTradesByPortfolioId(
             @PathVariable @Positive(message = "portfolioId must be positive") Long portfolioId) {
+        requirePositive(portfolioId, "portfolioId");
         return ApiResponse.success(simulatedTradeService.listByPortfolioId(portfolioId));
     }
 
     @GetMapping("/accounts/{accountId}/cash-ledger")
     public ApiResponse<List<CashLedgerResponse>> listCashLedgerByAccountId(
             @PathVariable @Positive(message = "accountId must be positive") Long accountId) {
+        requirePositive(accountId, "accountId");
         return ApiResponse.success(cashLedgerService.listByAccountId(accountId));
+    }
+
+    private void requirePositive(Long value, String name) {
+        if (value == null || value <= 0) {
+            throw new BusinessRuleException(name + " must be positive");
+        }
     }
 }

@@ -367,9 +367,13 @@ public class SimulatedOrderExecutionServiceImpl implements SimulatedOrderExecuti
         ledger.setFrozenCashAfter(frozenCashAfter.setScale(MONEY_SCALE, RoundingMode.UNNECESSARY));
         ledger.setDescription(description);
         ledger.setCreatedAt(LocalDateTime.now());
-        int insertedRows = cashLedgerMapper.insert(ledger);
-        if (insertedRows != 1) {
-            throw new BusinessRuleException("Cash ledger creation failed");
+        try {
+            int insertedRows = cashLedgerMapper.insert(ledger);
+            if (insertedRows != 1) {
+                throw new BusinessRuleException("Cash ledger creation failed");
+            }
+        } catch (DuplicateKeyException ex) {
+            throw new BusinessRuleException("Cash ledger entry already exists, please refresh");
         }
     }
 

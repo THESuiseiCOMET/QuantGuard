@@ -3,6 +3,7 @@ package com.chenbo.quantguard.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.chenbo.quantguard.dto.CreateSimulatedOrderRequest;
 import com.chenbo.quantguard.dto.SimulatedOrderResponse;
+import com.chenbo.quantguard.entity.CashLedger;
 import com.chenbo.quantguard.entity.InvestmentPortfolio;
 import com.chenbo.quantguard.entity.PortfolioPosition;
 import com.chenbo.quantguard.entity.PortfolioRiskConfig;
@@ -10,6 +11,7 @@ import com.chenbo.quantguard.entity.SecurityInstrument;
 import com.chenbo.quantguard.entity.SimulatedOrder;
 import com.chenbo.quantguard.entity.SimulationAccount;
 import com.chenbo.quantguard.enums.AccountStatus;
+import com.chenbo.quantguard.enums.CashLedgerEntryType;
 import com.chenbo.quantguard.enums.InstrumentStatus;
 import com.chenbo.quantguard.enums.OrderSide;
 import com.chenbo.quantguard.enums.OrderStatus;
@@ -17,6 +19,7 @@ import com.chenbo.quantguard.enums.OrderType;
 import com.chenbo.quantguard.enums.RiskConfigStatus;
 import com.chenbo.quantguard.exception.BusinessRuleException;
 import com.chenbo.quantguard.exception.ResourceNotFoundException;
+import com.chenbo.quantguard.mapper.CashLedgerMapper;
 import com.chenbo.quantguard.mapper.InvestmentPortfolioMapper;
 import com.chenbo.quantguard.mapper.PortfolioPositionMapper;
 import com.chenbo.quantguard.mapper.PortfolioRiskConfigMapper;
@@ -24,6 +27,7 @@ import com.chenbo.quantguard.mapper.SecurityInstrumentMapper;
 import com.chenbo.quantguard.mapper.SimulatedOrderMapper;
 import com.chenbo.quantguard.mapper.SimulationAccountMapper;
 import com.chenbo.quantguard.service.SimulatedOrderService;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,19 +51,22 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
     private final SecurityInstrumentMapper securityInstrumentMapper;
     private final PortfolioRiskConfigMapper portfolioRiskConfigMapper;
     private final PortfolioPositionMapper portfolioPositionMapper;
+    private final CashLedgerMapper cashLedgerMapper;
 
     public SimulatedOrderServiceImpl(SimulatedOrderMapper simulatedOrderMapper,
                                      SimulationAccountMapper simulationAccountMapper,
                                      InvestmentPortfolioMapper investmentPortfolioMapper,
                                      SecurityInstrumentMapper securityInstrumentMapper,
                                      PortfolioRiskConfigMapper portfolioRiskConfigMapper,
-                                     PortfolioPositionMapper portfolioPositionMapper) {
+                                     PortfolioPositionMapper portfolioPositionMapper,
+                                     CashLedgerMapper cashLedgerMapper) {
         this.simulatedOrderMapper = simulatedOrderMapper;
         this.simulationAccountMapper = simulationAccountMapper;
         this.investmentPortfolioMapper = investmentPortfolioMapper;
         this.securityInstrumentMapper = securityInstrumentMapper;
         this.portfolioRiskConfigMapper = portfolioRiskConfigMapper;
         this.portfolioPositionMapper = portfolioPositionMapper;
+        this.cashLedgerMapper = cashLedgerMapper;
     }
 
     @Override
@@ -110,6 +117,9 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
         int insertedRows = simulatedOrderMapper.insert(order);
         if (insertedRows != 1) {
             throw new BusinessRuleException("Simulated order creation failed, please retry");
+        }
+        if (request.side() == OrderSide.BUY) {
+            createBuyOrderFreezeLedger(order, account);
         }
         return SimulatedOrderResponse.from(order);
     }
@@ -238,6 +248,29 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
         int updatedRows = simulationAccountMapper.updateById(account);
         if (updatedRows != 1) {
             throw new BusinessRuleException("Account cash changed, please retry");
+        }
+    }
+
+    private void createBuyOrderFreezeLedger(SimulatedOrder order, SimulationAccount account) {
+        CashLedger ledger = new CashLedger();
+        ledger.setAccountId(order.getAccountId());
+        ledger.setPortfolioId(order.getPortfolioId());
+        ledger.setOrderId(order.getId());
+        ledger.setTradeId(null);
+        ledger.setEntryType(CashLedgerEntryType.BUY_ORDER_FREEZE);
+        ledger.setAvailableCashDelta(order.getFrozenAmount().negate().setScale(MONEY_SCALE, RoundingMode.UNNECESSARY));
+        ledger.setFrozenCashDelta(order.getFrozenAmount().setScale(MONEY_SCALE, RoundingMode.UNNECESSARY));
+        ledger.setAvailableCashAfter(account.getAvailableCash().setScale(MONEY_SCALE, RoundingMode.UNNECESSARY));
+        ledger.setFrozenCashAfter(account.getFrozenCash().setScale(MONEY_SCALE, RoundingMode.UNNECESSARY));
+        ledger.setDescription("BUY order cash freeze");
+        ledger.setCreatedAt(LocalDateTime.now());
+        try {
+            int insertedRows = cashLedgerMapper.insert(ledger);
+            if (insertedRows != 1) {
+                throw new BusinessRuleException("Cash ledger creation failed");
+            }
+        } catch (DuplicateKeyException ex) {
+            throw new BusinessRuleException("Cash ledger entry already exists, please refresh");
         }
     }
 

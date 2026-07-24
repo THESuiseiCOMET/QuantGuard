@@ -2,6 +2,7 @@ package com.chenbo.quantguard.service;
 
 import com.chenbo.quantguard.dto.CreateSimulatedOrderRequest;
 import com.chenbo.quantguard.dto.SimulatedOrderResponse;
+import com.chenbo.quantguard.entity.CashLedger;
 import com.chenbo.quantguard.entity.InvestmentPortfolio;
 import com.chenbo.quantguard.entity.PortfolioPosition;
 import com.chenbo.quantguard.entity.PortfolioRiskConfig;
@@ -11,6 +12,7 @@ import com.chenbo.quantguard.entity.SimulationAccount;
 import com.chenbo.quantguard.enums.AccountStatus;
 import com.chenbo.quantguard.enums.AccountType;
 import com.chenbo.quantguard.enums.AssetType;
+import com.chenbo.quantguard.enums.CashLedgerEntryType;
 import com.chenbo.quantguard.enums.Exchange;
 import com.chenbo.quantguard.enums.InstrumentStatus;
 import com.chenbo.quantguard.enums.OrderSide;
@@ -18,6 +20,7 @@ import com.chenbo.quantguard.enums.OrderStatus;
 import com.chenbo.quantguard.enums.OrderType;
 import com.chenbo.quantguard.enums.RiskConfigStatus;
 import com.chenbo.quantguard.exception.BusinessRuleException;
+import com.chenbo.quantguard.mapper.CashLedgerMapper;
 import com.chenbo.quantguard.mapper.InvestmentPortfolioMapper;
 import com.chenbo.quantguard.mapper.PortfolioPositionMapper;
 import com.chenbo.quantguard.mapper.PortfolioRiskConfigMapper;
@@ -31,6 +34,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -64,6 +68,9 @@ class SimulatedOrderServiceImplTest {
     @Mock
     private PortfolioPositionMapper portfolioPositionMapper;
 
+    @Mock
+    private CashLedgerMapper cashLedgerMapper;
+
     private SimulatedOrderServiceImpl simulatedOrderService;
 
     @BeforeEach
@@ -74,7 +81,8 @@ class SimulatedOrderServiceImplTest {
                 investmentPortfolioMapper,
                 securityInstrumentMapper,
                 portfolioRiskConfigMapper,
-                portfolioPositionMapper);
+                portfolioPositionMapper,
+                cashLedgerMapper);
     }
 
     @Test
@@ -86,6 +94,7 @@ class SimulatedOrderServiceImplTest {
             order.setId(100L);
             return 1;
         });
+        when(cashLedgerMapper.insert(any(CashLedger.class))).thenReturn(1);
 
         SimulatedOrderResponse response = simulatedOrderService.create(new CreateSimulatedOrderRequest(
                 1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000")));
@@ -94,6 +103,16 @@ class SimulatedOrderServiceImplTest {
         assertEquals(new BigDecimal("2000.0000"), response.frozenAmount());
         verify(simulationAccountMapper).updateById(any(SimulationAccount.class));
         verify(portfolioPositionMapper, never()).updateById(any(PortfolioPosition.class));
+
+        ArgumentCaptor<CashLedger> ledgerCaptor = ArgumentCaptor.forClass(CashLedger.class);
+        verify(cashLedgerMapper).insert(ledgerCaptor.capture());
+        CashLedger ledger = ledgerCaptor.getValue();
+        assertEquals(100L, ledger.getOrderId());
+        assertEquals(CashLedgerEntryType.BUY_ORDER_FREEZE, ledger.getEntryType());
+        assertEquals(new BigDecimal("-2000.0000"), ledger.getAvailableCashDelta());
+        assertEquals(new BigDecimal("2000.0000"), ledger.getFrozenCashDelta());
+        assertEquals(new BigDecimal("98000.0000"), ledger.getAvailableCashAfter());
+        assertEquals(new BigDecimal("2000.0000"), ledger.getFrozenCashAfter());
     }
 
     @Test
@@ -116,6 +135,7 @@ class SimulatedOrderServiceImplTest {
             order.setId(102L);
             return 1;
         });
+        when(cashLedgerMapper.insert(any(CashLedger.class))).thenReturn(1);
 
         SimulatedOrderResponse response = simulatedOrderService.create(new CreateSimulatedOrderRequest(
                 1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("1.000000"), new BigDecimal("0.0001")));
@@ -132,6 +152,7 @@ class SimulatedOrderServiceImplTest {
             order.setId(103L);
             return 1;
         });
+        when(cashLedgerMapper.insert(any(CashLedger.class))).thenReturn(1);
 
         SimulatedOrderResponse response = simulatedOrderService.create(new CreateSimulatedOrderRequest(
                 1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("1.234567"), new BigDecimal("2.3456")));
@@ -171,6 +192,7 @@ class SimulatedOrderServiceImplTest {
         verify(portfolioPositionMapper).updateById(positionCaptor.capture());
         assertEquals(new BigDecimal("300.000000"), positionCaptor.getValue().getAvailableQuantity());
         assertEquals(new BigDecimal("200.000000"), positionCaptor.getValue().getFrozenQuantity());
+        verify(cashLedgerMapper, never()).insert(any(CashLedger.class));
     }
 
     @Test
@@ -178,6 +200,36 @@ class SimulatedOrderServiceImplTest {
         stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
         when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
         when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenReturn(0);
+
+        assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
+                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));
+    }
+
+    @Test
+    void buyOrderRejectsWhenFreezeLedgerInsertFails() {
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
+        when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenAnswer(invocation -> {
+            SimulatedOrder order = invocation.getArgument(0);
+            order.setId(104L);
+            return 1;
+        });
+        when(cashLedgerMapper.insert(any(CashLedger.class))).thenReturn(0);
+
+        assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
+                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));
+    }
+
+    @Test
+    void buyOrderDuplicateFreezeLedgerIsConvertedToBusinessException() {
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
+        when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenAnswer(invocation -> {
+            SimulatedOrder order = invocation.getArgument(0);
+            order.setId(105L);
+            return 1;
+        });
+        when(cashLedgerMapper.insert(any(CashLedger.class))).thenThrow(new DuplicateKeyException("duplicate"));
 
         assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
                 1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));

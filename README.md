@@ -9,7 +9,7 @@ QuantGuard（智衡量化交易与风控系统）后端是一个本地自用的 
 - 投资组合；
 - 证券标的；
 - 只读持仓；
-- 后续模拟订单、成交、资金流水和风控。
+- 模拟订单、成交、资金流水和风控。
 
 当前阶段不做：
 
@@ -51,6 +51,7 @@ source src/main/resources/db/migration/V2__create_investment_portfolio.sql;
 source src/main/resources/db/migration/V3__create_instrument_and_position_tables.sql;
 source src/main/resources/db/migration/V4__create_risk_config_and_simulated_order_tables.sql;
 source src/main/resources/db/migration/V5__create_trade_and_cash_ledger_tables.sql;
+source src/main/resources/db/migration/V5_1__harden_cash_ledger.sql;
 ```
 
 这些迁移脚本都包含：
@@ -60,6 +61,8 @@ USE quant_guard;
 ```
 
 所以在数据库已创建后，也可以直接用 MySQL Workbench 打开完整脚本并执行。
+
+`V5_1__harden_cash_ledger.sql` 是增量加固脚本：它会调整 `cash_ledger` 的合法流水类型，并新增 `(order_id, entry_type)` 唯一约束。该脚本应在 V5 后手动执行一次，不是可无限重复执行的脚本。
 
 ## 本地配置
 
@@ -91,6 +94,20 @@ src/main/resources/application-local.yaml
 ```powershell
 .\mvnw.cmd test
 ```
+
+运行完整普通测试：
+
+```powershell
+.\mvnw.cmd clean test
+```
+
+运行 Testcontainers MySQL 集成测试：
+
+```powershell
+.\mvnw.cmd -P integration verify
+```
+
+集成测试使用临时 MySQL 容器和测试数据，不连接你的本地 `quant_guard`，也不读取 `application-local.yaml` 中的真实数据库密码。
 
 启动后可访问：
 
@@ -178,7 +195,9 @@ V4 订单规则：
 - 订单金额低于 `0.0001` 时直接拒绝，避免冻结金额变成 `0.0000`；
 - BUY 冻结金额来自订单提交时统一计算出的 `frozenAmount`，后续成交模块不应重新计算另一套订单金额；
 - BUY 订单通过风控后冻结账户可用现金；
+- BUY 订单创建成功后写入 `BUY_ORDER_FREEZE` 资金流水；
 - SELL 订单通过风控后冻结对应组合、对应标的的可用持仓；
+- SELL 下单不改变现金，因此不创建现金流水；
 - 风控失败时不创建 `simulated_order`；
 - 风控失败时不修改账户资金；
 - 风控失败时不修改持仓数量；
@@ -210,6 +229,15 @@ V5 只支持本地模拟的全量成交：
 - 不接入真实行情；
 - 不接入真实券商；
 - 不做实盘交易。
+
+资金流水覆盖范围：
+
+- BUY 下单冻结现金：`BUY_ORDER_FREEZE`；
+- BUY 成交扣除冻结现金：`BUY_SETTLEMENT`；
+- SELL 成交增加可用现金：`SELL_PROCEEDS`；
+- BUY 取消释放冻结现金：`BUY_CANCEL_RELEASE`；
+- SELL 下单和 SELL 取消不产生现金流水，因为它们只冻结或释放持仓数量；
+- V5.1 不会自动为历史 BUY 订单补写冻结流水，历史脏数据后续可通过单独的数据修复脚本处理。
 
 BUY 成交：
 
@@ -245,7 +273,7 @@ SELL 成交：
 - 所有 `updateById` 和关键 `insert` 都检查返回值；
 - 失败时抛出运行时业务异常，由 Spring 事务回滚。
 
-## MySQL 事务集成测试计划
+## MySQL 事务集成测试
 
 普通命令：
 
@@ -255,7 +283,7 @@ SELL 成交：
 
 该命令只运行不依赖真实 MySQL 的单元测试和 Web 层测试。
 
-后续建议增加独立的 Testcontainers MySQL 集成测试 profile，例如：
+Testcontainers MySQL 集成测试命令：
 
 ```powershell
 .\mvnw.cmd -P integration verify
@@ -265,9 +293,8 @@ SELL 成交：
 
 - BUY 执行中途失败时，订单仍为 `OPEN`，资金和持仓回滚；
 - SELL 执行中途失败时，订单、持仓和现金回滚；
-- 两个并发请求执行同一订单时，最多一个成功，且只产生一条成交记录。
-
-当前 V5 已通过 Mockito 单元测试验证异常传播和事务边界代码结构，但没有在本机真实 MySQL 或 Testcontainers 中执行数据库回滚验证。
+- 两个并发请求执行同一订单时，最多一个成功，且只产生一条成交记录；
+- 执行和取消并发操作同一订单时，只能一个操作成功。
 
 ## 项目资产规则
 

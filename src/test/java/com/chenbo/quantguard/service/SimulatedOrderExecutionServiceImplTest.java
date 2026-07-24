@@ -38,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -113,6 +114,7 @@ class SimulatedOrderExecutionServiceImplTest {
         verify(cashLedgerMapper).insert(ledgerCaptor.capture());
         assertEquals(CashLedgerEntryType.BUY_SETTLEMENT, ledgerCaptor.getValue().getEntryType());
         assertEquals(new BigDecimal("-2000.0000"), ledgerCaptor.getValue().getFrozenCashDelta());
+        verify(cashLedgerMapper, times(1)).insert(any(CashLedger.class));
     }
 
     @Test
@@ -164,6 +166,11 @@ class SimulatedOrderExecutionServiceImplTest {
         ArgumentCaptor<SimulationAccount> accountCaptor = ArgumentCaptor.forClass(SimulationAccount.class);
         verify(simulationAccountMapper).updateById(accountCaptor.capture());
         assertEquals(new BigDecimal("82000.0000"), accountCaptor.getValue().getAvailableCash());
+
+        ArgumentCaptor<CashLedger> ledgerCaptor = ArgumentCaptor.forClass(CashLedger.class);
+        verify(cashLedgerMapper).insert(ledgerCaptor.capture());
+        assertEquals(CashLedgerEntryType.SELL_PROCEEDS, ledgerCaptor.getValue().getEntryType());
+        verify(cashLedgerMapper, times(1)).insert(any(CashLedger.class));
     }
 
     @Test
@@ -203,6 +210,10 @@ class SimulatedOrderExecutionServiceImplTest {
         assertEquals(new BigDecimal("82000.0000"), accountCaptor.getValue().getAvailableCash());
         assertEquals(new BigDecimal("0.0000"), accountCaptor.getValue().getFrozenCash());
         verify(cashLedgerMapper).insert(any(CashLedger.class));
+        ArgumentCaptor<CashLedger> ledgerCaptor = ArgumentCaptor.forClass(CashLedger.class);
+        verify(cashLedgerMapper).insert(ledgerCaptor.capture());
+        assertEquals(CashLedgerEntryType.BUY_CANCEL_RELEASE, ledgerCaptor.getValue().getEntryType());
+        verify(cashLedgerMapper, times(1)).insert(any(CashLedger.class));
     }
 
     @Test
@@ -303,6 +314,20 @@ class SimulatedOrderExecutionServiceImplTest {
         when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
         when(simulatedTradeMapper.insert(any(SimulatedTrade.class))).thenReturn(1);
         when(cashLedgerMapper.insert(any(CashLedger.class))).thenReturn(0);
+
+        assertThrows(BusinessRuleException.class, () -> executionService.execute(100L));
+    }
+
+    @Test
+    void duplicateLedgerIsConvertedToBusinessException() {
+        SimulatedOrder order = buyOrder();
+        stubOrderAndRelations(order, account(new BigDecimal("80000.0000"), new BigDecimal("2000.0000")));
+        when(simulatedOrderMapper.updateById(any(SimulatedOrder.class))).thenReturn(1);
+        when(portfolioPositionMapper.selectOne(any())).thenReturn(null);
+        when(portfolioPositionMapper.insert(any(PortfolioPosition.class))).thenReturn(1);
+        when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
+        when(simulatedTradeMapper.insert(any(SimulatedTrade.class))).thenReturn(1);
+        when(cashLedgerMapper.insert(any(CashLedger.class))).thenThrow(new DuplicateKeyException("duplicate"));
 
         assertThrows(BusinessRuleException.class, () -> executionService.execute(100L));
     }

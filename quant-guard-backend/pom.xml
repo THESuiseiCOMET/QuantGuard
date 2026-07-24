@@ -8,7 +8,7 @@
         <version>4.1.0</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>com.chenbo</groupId>
+    <groupId>com.vanyiung</groupId>
     <artifactId>quant-guard-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>quant-guard-backend</name>

@@ -1,48 +1,68 @@
-HELP.md
+# Java / Maven
 target/
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+**/target/
+!.mvn/wrapper/
+!**/.mvn/wrapper/
+!.mvn/wrapper/maven-wrapper.properties
+!**/.mvn/wrapper/maven-wrapper.properties
+*.class
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
+# Node / frontend
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+coverage/
+**/coverage/
+.vite/
+**/.vite/
 
-### IntelliJ IDEA ###
-.idea
+# Local environment
+.env
+.env.*
+!.env.example
+!**/.env.example
+application-local.yaml
+application-local.yml
+**/application-local.yaml
+**/application-local.yml
+*.local
+
+# Logs and reports
+logs/
+**/logs/
+*.log
+test-results/
+**/test-results/
+playwright-report/
+**/playwright-report/
+
+# IDEs
+.idea/
+**/.idea/
+.vscode/
+**/.vscode/
 *.iws
 *.iml
 *.ipr
+.classpath
+.project
+.settings/
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
+# OS and temporary files
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
 
-### VS Code ###
-.vscode/
-
-### Logs ###
-logs/
-*.log
-
-### Local environment ###
-.env
-.env.*
-application-local.yaml
-application-local.yml
-*.local
-
-### Secrets ###
+# Local databases and sensitive material
+*.sqlite
+*.sqlite3
+*.db
 *.secret
 secrets/
+**/secrets/
+*.pem
+*.key
+*.p12
+*.jks

@@ -25,18 +25,22 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+          cache-dependency-path: quant-guard-backend/pom.xml
 
       - name: Make Maven wrapper executable
+        working-directory: quant-guard-backend
         run: chmod +x mvnw
 
       - name: Verify Docker is available
         run: docker info
 
       - name: Run backend integration tests
+        working-directory: quant-guard-backend
         run: ./mvnw --batch-mode -P integration verify
 
       - name: Verify integration tests were not skipped
         shell: bash
+        working-directory: quant-guard-backend
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -72,7 +76,7 @@ jobs:
         with:
           name: integration-test-reports
           path: |
-            target/surefire-reports/**
-            target/failsafe-reports/**
+            quant-guard-backend/target/surefire-reports/**
+            quant-guard-backend/target/failsafe-reports/**
           if-no-files-found: ignore
           retention-days: 7

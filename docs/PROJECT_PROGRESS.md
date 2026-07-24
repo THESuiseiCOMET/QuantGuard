@@ -74,18 +74,24 @@ Frontend development is intentionally deferred until the user resumes and confir
 ### Portfolio Risk Checks And Simulated Orders
 
 - Commit: `af5ebdb feat: add portfolio risk checks and simulated orders`
+- Hardening commit: `17c24f6 fix: harden simulated order amount and rollback checks`
 - Result:
   - Added portfolio risk config for max single order amount, buy/sell switches, and reserved position ratio.
   - Added simulated LIMIT order submission.
+  - System order amount precision is 4 decimal places.
+  - Orders with raw amount below `0.0001` are rejected before cash or position freeze.
   - BUY orders freeze account cash after risk checks.
   - SELL orders freeze available position quantity after risk checks.
   - Cash and position freeze updates use MyBatis-Plus optimistic locking through `@Version`.
+  - Simulated order insert result is checked after freeze; insert failure throws an exception so the transaction can roll back database updates.
   - Failed risk checks do not create `simulated_order`.
   - Failed risk checks do not mutate cash or position quantities.
+  - `maxPositionRatio` is reserved for future market-value risk checks and is not enforced in V4 because there is no real market data or reliable market value.
+  - V4 active risk checks are `allowBuy`, `allowSell`, `maxSingleOrderAmount`, available cash, and available position quantity.
   - `OrderStatus.REJECTED` is reserved for future audit features and is not persisted by the V4 API flow.
 - Validation:
   - `.\mvnw.cmd clean test`
-  - Tests run: 56
+  - Tests run: 61
   - Failures: 0
   - Errors: 0
 

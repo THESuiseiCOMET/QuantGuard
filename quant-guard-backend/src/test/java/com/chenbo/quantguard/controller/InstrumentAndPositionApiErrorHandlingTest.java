@@ -12,6 +12,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
+import java.util.List;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -122,5 +124,27 @@ class InstrumentAndPositionApiErrorHandlingTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Portfolio position not found"));
+    }
+
+    @Test
+    void emptyPortfolioPositionsReturnsOkWithEmptyData() throws Exception {
+        when(portfolioPositionService.listByPortfolioId(3L)).thenReturn(List.of());
+
+        positionMockMvc.perform(get("/api/portfolios/3/positions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void missingPortfolioPositionsReturnsNotFound() throws Exception {
+        when(portfolioPositionService.listByPortfolioId(999L))
+                .thenThrow(new ResourceNotFoundException("Investment portfolio not found"));
+
+        positionMockMvc.perform(get("/api/portfolios/999/positions"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Investment portfolio not found"));
     }
 }

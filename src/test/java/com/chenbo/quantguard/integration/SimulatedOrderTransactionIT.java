@@ -41,7 +41,8 @@ class SimulatedOrderTransactionIT {
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.36")
             .withDatabaseName("quant_guard")
             .withUsername("quantguard_test")
-            .withPassword("quantguard_test");
+            .withPassword("quantguard_test")
+            .withCommand("--log-bin-trust-function-creators=1");
 
     private static boolean schemaInitialized;
 
@@ -356,14 +357,26 @@ class SimulatedOrderTransactionIT {
     }
 
     private BigDecimal positionTotalQuantity() {
-        return jdbcTemplate.queryForObject("SELECT total_quantity FROM portfolio_position WHERE id = 1", BigDecimal.class);
+        return jdbcTemplate.queryForObject("""
+                SELECT total_quantity
+                FROM portfolio_position
+                WHERE portfolio_id = 1 AND instrument_id = 1
+                """, BigDecimal.class);
     }
 
     private BigDecimal positionAvailableQuantity() {
-        return jdbcTemplate.queryForObject("SELECT available_quantity FROM portfolio_position WHERE id = 1", BigDecimal.class);
+        return jdbcTemplate.queryForObject("""
+                SELECT available_quantity
+                FROM portfolio_position
+                WHERE portfolio_id = 1 AND instrument_id = 1
+                """, BigDecimal.class);
     }
 
     private BigDecimal positionFrozenQuantity() {
-        return jdbcTemplate.queryForObject("SELECT frozen_quantity FROM portfolio_position WHERE id = 1", BigDecimal.class);
+        return jdbcTemplate.queryForObject("""
+                SELECT frozen_quantity
+                FROM portfolio_position
+                WHERE portfolio_id = 1 AND instrument_id = 1
+                """, BigDecimal.class);
     }
 }

@@ -314,3 +314,322 @@ Testcontainers MySQL 集成测试命令：
 - 长期项目进度保存在 `docs/PROJECT_PROGRESS.md`；
 - 可提交的本地配置只放 example 模板；
 - 真实密码、Token、私钥、日志、构建产物和本地配置不得提交。
+
+---
+
+# QuantGuard Backend
+
+QuantGuard Backend is a local Spring Boot simulation trading and risk-control system.
+
+The current scope includes:
+
+- backend foundations for strategy analysis;
+- simulation accounts;
+- investment portfolios;
+- security instruments;
+- read-only portfolio positions;
+- simulated orders, trades, cash ledger records, and risk control.
+
+The current scope excludes:
+
+- frontend page implementation;
+- real broker connections;
+- real-money trading;
+- automated live order placement;
+- cookie, token, client reverse engineering, or UI scraping;
+- real-time market data integration;
+- high-frequency trading.
+
+## Local Database Initialization
+
+The backend uses a local MySQL database:
+
+```text
+quant_guard
+```
+
+### 1. Create The Database
+
+Run the following manually in MySQL:
+
+```sql
+source src/main/resources/db/create_database.sql;
+```
+
+If the MySQL client is not opened from the project root, use the full path to the file.
+
+### 2. Run Migration Scripts In Order
+
+Flyway is not enabled yet. SQL files under `src/main/resources/db/migration/` are versioned, Git-managed scripts that must be executed manually.
+
+Run them in order:
+
+```sql
+source src/main/resources/db/migration/V1__create_simulation_account.sql;
+source src/main/resources/db/migration/V2__create_investment_portfolio.sql;
+source src/main/resources/db/migration/V3__create_instrument_and_position_tables.sql;
+source src/main/resources/db/migration/V4__create_risk_config_and_simulated_order_tables.sql;
+source src/main/resources/db/migration/V5__create_trade_and_cash_ledger_tables.sql;
+source src/main/resources/db/migration/V5_1__harden_cash_ledger.sql;
+```
+
+Each migration contains:
+
+```sql
+USE quant_guard;
+```
+
+After the database exists, you can also open and run each full script in MySQL Workbench.
+
+`V5_1__harden_cash_ledger.sql` is an incremental hardening script. It adjusts valid `cash_ledger` entry types and adds the `(order_id, entry_type)` unique constraint. Run it once after V5. It is not intended to be executed repeatedly.
+
+Before running V5.1, check for duplicate ledger records:
+
+```sql
+SELECT order_id, entry_type, COUNT(*) AS duplicate_count
+FROM cash_ledger
+GROUP BY order_id, entry_type
+HAVING COUNT(*) > 1;
+```
+
+Only run `V5_1__harden_cash_ledger.sql` when the query returns no rows. If duplicates exist, do not delete or merge records automatically; review which entries should remain first.
+
+## Local Configuration
+
+Commit-safe configuration template:
+
+```text
+src/main/resources/application-local.example.yaml
+```
+
+Real local configuration:
+
+```text
+src/main/resources/application-local.yaml
+```
+
+For first-time setup, copy the example file to `application-local.yaml`, then fill in your local MySQL username and password.
+
+Notes:
+
+- `application-local.yaml` is ignored by `.gitignore`;
+- do not commit real database passwords;
+- do not commit API keys, tokens, private keys, or cookies;
+- do not commit real trading data or personal private data.
+
+## Common Validation
+
+Run tests:
+
+```powershell
+.\mvnw.cmd test
+```
+
+Run the full regular test suite:
+
+```powershell
+.\mvnw.cmd clean test
+```
+
+Run Testcontainers MySQL integration tests:
+
+```powershell
+.\mvnw.cmd -P integration verify
+```
+
+The integration tests use a temporary MySQL container and test data. They do not connect to your local `quant_guard` database or read real database passwords from `application-local.yaml`.
+
+After startup, the following endpoints are available:
+
+```text
+GET http://localhost:8080/api/health
+GET http://localhost:8080/api/database/health
+```
+
+## Main APIs
+
+Health:
+
+```text
+GET /api/health
+GET /api/database/health
+```
+
+Simulation accounts:
+
+```text
+POST /api/accounts
+GET  /api/accounts
+GET  /api/accounts/{id}
+```
+
+Investment portfolios:
+
+```text
+POST /api/portfolios
+GET  /api/portfolios
+GET  /api/portfolios/{id}
+GET  /api/accounts/{accountId}/portfolios
+```
+
+Security instruments:
+
+```text
+POST /api/instruments
+GET  /api/instruments
+GET  /api/instruments/{id}
+```
+
+Portfolio positions:
+
+```text
+GET /api/portfolios/{portfolioId}/positions
+GET /api/positions/{id}
+```
+
+Positions currently have no public write API. Future updates should only be performed by simulated trade execution services inside transactions, so orders and risk control cannot be bypassed.
+
+Risk configuration:
+
+```text
+POST /api/risk-configs
+GET  /api/risk-configs/{id}
+GET  /api/portfolios/{portfolioId}/risk-config
+```
+
+Simulated orders:
+
+```text
+POST /api/orders
+GET  /api/orders
+GET  /api/orders/{id}
+GET  /api/portfolios/{portfolioId}/orders
+```
+
+Simulated execution, cancellation, and queries:
+
+```text
+POST /api/orders/{id}/execute
+POST /api/orders/{id}/cancel
+GET  /api/trades
+GET  /api/trades/{id}
+GET  /api/orders/{orderId}/trades
+GET  /api/portfolios/{portfolioId}/trades
+GET  /api/accounts/{accountId}/cash-ledger
+```
+
+## V4 Order Rules
+
+- Only `LIMIT` simulated orders are currently supported.
+- Order amount precision is 4 decimal places.
+- Orders below `0.0001` are rejected to avoid freezing `0.0000`.
+- BUY frozen amount comes from the unified `frozenAmount` calculated when the order is submitted; later execution code should not calculate a second amount.
+- BUY orders freeze available account cash after risk checks pass.
+- BUY order creation writes a `BUY_ORDER_FREEZE` cash ledger record.
+- SELL orders freeze available position quantity for the matching portfolio and instrument after risk checks pass.
+- SELL order creation does not change cash, so it does not create a cash ledger record.
+- Risk-control failures do not create `simulated_order` records.
+- Risk-control failures do not change account cash.
+- Risk-control failures do not change position quantity.
+- `OrderStatus.REJECTED` is reserved for future audit records. The V4 normal API flow does not persist rejected orders.
+- V4 does not implement order execution.
+- V4 does not implement order cancellation.
+- V4 does not connect to real quotes, real brokers, or live trading.
+
+V4 active risk rules:
+
+- `allowBuy`;
+- `allowSell`;
+- `maxSingleOrderAmount`;
+- BUY available cash check;
+- SELL available position check.
+
+`maxPositionRatio` is reserved for future market-value risk control. Because the project currently has no real quotes or reliable market value, V4 does not enforce max position ratio checks and does not use cost or order price as fake real-time market value.
+
+## V5 Simulated Execution Rules
+
+V5 supports local simulated full-fill execution only:
+
+- only `OPEN` orders are executable;
+- execution is all-or-nothing, with no partial fills;
+- execution price uses the order's stored `limitPrice`;
+- BUY execution amount uses the order's existing `frozenAmount`, without recalculating another amount;
+- SELL execution amount uses the same V4 rule and 4-decimal precision;
+- this is not exchange matching and does not represent real market execution price;
+- no real quotes are integrated;
+- no real brokers are integrated;
+- no live trading is performed.
+
+Cash ledger coverage:
+
+- BUY order cash freeze: `BUY_ORDER_FREEZE`;
+- BUY execution frozen cash deduction: `BUY_SETTLEMENT`;
+- SELL execution cash increase: `SELL_PROCEEDS`;
+- BUY cancellation frozen cash release: `BUY_CANCEL_RELEASE`;
+- SELL order creation and SELL cancellation do not create cash ledger records because they only freeze or release position quantity;
+- V5.1 does not backfill freeze ledger records for historical BUY orders. Historical dirty data can be handled later by a dedicated data repair script.
+
+BUY execution:
+
+- order status changes from `OPEN` to `FILLED`;
+- account `frozenCash` decreases;
+- `availableCash` is not decreased again;
+- the matching portfolio and instrument position is created or updated;
+- a `simulated_trade` record is created;
+- a `BUY_SETTLEMENT` cash ledger record is created.
+
+SELL execution:
+
+- order status changes from `OPEN` to `FILLED`;
+- matching position `totalQuantity` decreases;
+- `frozenQuantity` decreases;
+- `availableQuantity` is not decreased again;
+- account `availableCash` increases;
+- a `simulated_trade` record is created;
+- a `SELL_PROCEEDS` cash ledger record is created.
+
+Order cancellation:
+
+- only `OPEN` orders can be cancelled;
+- BUY cancellation releases frozen cash and creates a `BUY_CANCEL_RELEASE` cash ledger record;
+- SELL cancellation releases frozen position quantity and does not create fake cash ledger records;
+- filled and cancelled orders cannot be executed or cancelled again.
+
+Concurrency control:
+
+- `SimulatedOrder.version` uses MyBatis-Plus `@Version`;
+- order execution and cancellation first claim the order with optimistic locking;
+- cash and position updates continue to use `@Version`;
+- all `updateById` calls and key inserts check their affected row counts;
+- failures throw runtime business exceptions and are rolled back by Spring transactions.
+
+## MySQL Transaction Integration Tests
+
+Regular command:
+
+```powershell
+.\mvnw.cmd clean test
+```
+
+This command only runs unit tests and web-layer tests that do not depend on real MySQL.
+
+Testcontainers MySQL integration test command:
+
+```powershell
+.\mvnw.cmd -P integration verify
+```
+
+The integration tests verify:
+
+- if BUY execution fails halfway, the order remains `OPEN`, and cash and positions roll back;
+- if SELL execution fails halfway, the order, positions, and cash roll back;
+- when two concurrent requests execute the same order, at most one succeeds and only one trade record is created;
+- when execution and cancellation race on the same order, only one operation can succeed.
+
+## Project Asset Rules
+
+- Important SQL files live in `src/main/resources/db/`.
+- Versioned schema scripts live in `src/main/resources/db/migration/`.
+- Long-term project progress is tracked in `docs/PROJECT_PROGRESS.md`.
+- Commit-safe local configuration belongs in example templates only.
+- Real passwords, tokens, private keys, logs, build artifacts, and local configuration files must not be committed.

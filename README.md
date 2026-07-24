@@ -10,7 +10,7 @@ The project is currently a local simulation system. It does not connect to real 
 QuantGuard/
 ├── .github/workflows/       # CI workflows for the monorepo
 ├── quant-guard-backend/     # Spring Boot backend
-└── quant-guard-frontend/    # Planned Vue frontend, not initialized yet
+└── quant-guard-frontend/    # Vue 3 frontend
 ```
 
 ## Current Implementation
@@ -34,15 +34,15 @@ Detailed backend setup, database migration order, API notes, and validation comm
 
 ### Frontend
 
-The frontend has not been initialized in this migration commit.
+The frontend is initialized with Vue 3, TypeScript, Vite, Vue Router, Pinia, Axios, and Element Plus.
 
-The planned location is:
+Current frontend pages include:
 
-```text
-quant-guard-frontend/
-```
-
-Frontend work should start only after the monorepo migration and backend CI are confirmed green.
+- dashboard summary based on existing backend list APIs;
+- simulation account list and creation;
+- investment portfolio list, account filter, creation, and current selection;
+- portfolio position list for the current selected portfolio;
+- placeholder routes for orders, trades, cash ledger, risk management, and later modules.
 
 ## Tech Stack
 
@@ -56,11 +56,15 @@ Backend:
 - JUnit
 - Testcontainers
 
-Frontend planned:
+Frontend:
 
 - Vue 3
 - TypeScript
 - Vite
+- Vue Router
+- Pinia
+- Axios
+- Element Plus
 
 ## Quick Start
 
@@ -92,13 +96,27 @@ GET http://localhost:8080/api/health
 GET http://localhost:8080/api/database/health
 ```
 
+Start the frontend:
+
+```powershell
+cd quant-guard-frontend
+npm install
+npm run dev
+```
+
+Default frontend URL:
+
+```text
+http://localhost:5173
+```
+
 ## Project Status
 
 QuantGuard is in active development.
 
 The backend core simulation loop is implemented through simulated accounts, portfolios, instruments, orders, trades, cash ledger records, and risk checks.
 
-The frontend is the next planned milestone and is intentionally not included in this migration commit.
+The frontend V1 foundation is in progress. The current implemented frontend scope covers dashboard, simulation accounts, investment portfolios, and positions. Simulated orders, trade records, cash ledger, and risk-management screens are planned for later frontend milestones.
 
 ## Safety Notice
 

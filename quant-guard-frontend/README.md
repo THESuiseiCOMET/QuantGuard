@@ -113,21 +113,23 @@ npm run build
 - 风险配置读取、创建和更新；
 - 模拟订单页面，支持按组合读取订单、读取真实证券标的、创建模拟限价订单、执行 OPEN 订单、取消 OPEN 订单，展示执行结果，并刷新真实账户资金和持仓；
 - 成交记录页面，支持按投资组合读取模拟成交、映射订单和证券信息、方向/证券/关键字筛选，以及查看模拟成交详情；
-- 账户、投资组合、持仓、风险配置、证券标的、模拟订单和模拟成交的类型化 API 封装。
+- 资金流水页面，支持按账户读取本地模拟流水、按当前组合前端筛选、映射订单/成交/证券信息、正负资金变动展示、筛选汇总和流水详情；
+- 账户、投资组合、持仓、风险配置、证券标的、模拟订单、模拟成交和资金流水的类型化 API 封装。
 
 尚未实现：
 
-- 独立资金流水页面；
 - 真实行情；
 - 历史行情；
 - 历史 K 线；
 - 自动撮合；
 - 回测；
 - 策略模块；
+- 登录权限；
+- 生产部署；
 - 真实券商接入；
 - 浮动盈亏计算。
 
-说明：模拟成交价格使用订单限价，不代表真实市场价格或真实市场撮合。`maxPositionRatio` 当前仅保存配置，现阶段后端尚未执行最大仓位比例检查。
+说明：QuantGuard 使用用户输入的限价进行本地模拟成交，不接入真实市场撮合，不连接真实券商，也不提交真实证券订单。`maxPositionRatio` 当前仅保存配置，现阶段后端尚未执行最大仓位比例检查。
 
 ---
 
@@ -244,18 +246,20 @@ Implemented:
 - risk configuration read, create, and update flows;
 - simulated order management, including portfolio-scoped order loading, real security instrument loading, simulated limit order creation, OPEN order execution, OPEN order cancellation, execution result display, and real account cash and position refreshes;
 - trade records, including portfolio-scoped simulated trade loading, order and instrument mapping, side/instrument/keyword filters, and simulated trade details;
-- typed API shells for accounts, portfolios, positions, risk configuration, security instruments, simulated orders, and simulated trades.
+- cash ledger records, including account-scoped simulated cash ledger loading, current-portfolio frontend filtering, order/trade/instrument mapping, signed cash delta display, filtered summaries, and ledger details;
+- typed API shells for accounts, portfolios, positions, risk configuration, security instruments, simulated orders, simulated trades, and cash ledger records.
 
 Not implemented yet:
 
-- dedicated cash ledger screen;
 - real-time quotes;
 - historical quotes;
 - historical candlesticks;
 - automatic matching;
 - backtesting;
 - strategy modules;
+- authentication/authorization;
+- production deployment;
 - real brokerage access;
 - floating P/L calculations.
 
-Note: order execution uses the order limit price for local simulated fills and does not represent real market prices or live market matching. `maxPositionRatio` is currently stored only. The backend does not yet enforce maximum position ratio checks.
+Note: QuantGuard uses user-entered limit prices for local simulated fills, does not connect to live market matching, does not connect to real brokers, and does not place real securities orders. `maxPositionRatio` is currently stored only. The backend does not yet enforce maximum position ratio checks.

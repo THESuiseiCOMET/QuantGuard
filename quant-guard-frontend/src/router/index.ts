@@ -6,9 +6,9 @@ import PortfoliosView from '@/views/portfolios/PortfoliosView.vue'
 import PositionsView from '@/views/positions/PositionsView.vue'
 import OrdersView from '@/views/orders/OrdersView.vue'
 import TradesView from '@/views/trades/TradesView.vue'
+import CashLedgerView from '@/views/cash-ledger/CashLedgerView.vue'
 import RiskConfigView from '@/views/risk/RiskConfigView.vue'
 import SystemView from '@/views/system/SystemView.vue'
-import DevelopmentView from '@/views/placeholder/DevelopmentView.vue'
 import NotFoundView from '@/views/placeholder/NotFoundView.vue'
 
 export const router = createRouter({
@@ -38,7 +38,7 @@ export const router = createRouter({
         {
           path: 'cash-ledger',
           name: 'cash-ledger',
-          component: DevelopmentView,
+          component: CashLedgerView,
           meta: { title: '资金流水' },
         },
         { path: 'risk', name: 'risk', component: RiskConfigView, meta: { title: '风险管理' } },

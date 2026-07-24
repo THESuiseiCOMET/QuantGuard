@@ -8,6 +8,7 @@ export type {
 export type { CreateInvestmentPortfolioRequest, InvestmentPortfolio } from '@/types/portfolio'
 export type { PortfolioPosition } from '@/types/position'
 export type { AssetType, Exchange, InstrumentStatus, SecurityInstrument } from '@/types/instrument'
+export type { CashLedgerEntry, CashLedgerEntryType } from '@/types/cashLedger'
 export type {
   CreateSimulatedOrderRequest,
   OrderSide,

@@ -43,7 +43,7 @@ QuantGuard/
 - 风险配置读取、创建和更新；
 - 模拟订单页面，支持按组合读取订单、读取真实证券标的、创建模拟限价订单、执行 OPEN 订单、取消 OPEN 订单，展示执行结果，并刷新真实账户资金和持仓；
 - 成交记录页面，支持按投资组合读取模拟成交、映射订单和证券信息、方向/证券/关键字筛选，以及查看模拟成交详情；
-- 资金流水和后续模块的占位路由。
+- 资金流水页面，支持按账户读取本地模拟流水、按当前组合前端筛选、映射订单/成交/证券信息、正负资金变动展示、筛选汇总和流水详情。
 
 ### 技术栈
 
@@ -125,7 +125,7 @@ QuantGuard 正在开发中。
 
 后端核心模拟链路已经覆盖模拟账户、投资组合、证券标的、订单、成交、资金流水和风控检查。
 
-前端 V1 基础能力已完成总览、模拟账户、投资组合、持仓、风险配置、模拟订单管理和成交记录页面。风险配置支持读取、创建和更新；`maxPositionRatio` 当前仅保存，尚未参与订单风控。订单执行使用订单限价进行本地模拟成交，不代表真实市场价格或真实市场撮合。独立资金流水页面、实时行情、历史行情、K 线、自动撮合、回测、策略模块和真实券商接入将在后续前端里程碑继续开发。
+前端 V1 基础能力已完成总览、模拟账户、投资组合、持仓、风险配置、模拟订单管理、成交记录页面和资金流水页面。风险配置支持读取、创建和更新；`maxPositionRatio` 当前仅保存，尚未参与订单风控。QuantGuard 使用用户输入的限价进行本地模拟成交，不接入真实市场撮合，不连接真实券商，也不提交真实证券订单。实时行情、历史行情、K 线、自动撮合、回测、策略执行、登录权限、生产部署和真实券商接入将在后续里程碑继续开发。
 
 ### 安全说明
 
@@ -180,7 +180,7 @@ Current frontend pages include:
 - risk configuration read, create, and update flows;
 - simulated order management, including portfolio-scoped order loading, real security instrument loading, simulated limit order creation, OPEN order execution, OPEN order cancellation, execution result display, and real account cash and position refreshes;
 - trade records, including portfolio-scoped simulated trade loading, order and instrument mapping, side/instrument/keyword filters, and simulated trade details;
-- placeholder routes for cash ledger and later modules.
+- cash ledger records, including account-scoped simulated cash ledger loading, current-portfolio frontend filtering, order/trade/instrument mapping, signed cash delta display, filtered summaries, and ledger details.
 
 ### Tech Stack
 
@@ -262,7 +262,7 @@ QuantGuard is in active development.
 
 The backend core simulation loop is implemented through simulated accounts, portfolios, instruments, orders, trades, cash ledger records, and risk checks.
 
-The frontend V1 foundation covers dashboard, simulation accounts, investment portfolios, positions, risk configuration, simulated order management, and trade records. Risk configuration supports reading, creation, and updates; `maxPositionRatio` is currently stored only and is not yet enforced during order risk checks. Order execution uses the order limit price for local simulated fills and does not represent real market prices or live market matching. Dedicated cash ledger screens, real-time quotes, historical quotes, candlesticks, automatic matching, backtesting, strategy modules, and real brokerage access are planned for later frontend milestones.
+The frontend V1 foundation covers dashboard, simulation accounts, investment portfolios, positions, risk configuration, simulated order management, trade records, and cash ledger records. Risk configuration supports reading, creation, and updates; `maxPositionRatio` is currently stored only and is not yet enforced during order risk checks. QuantGuard uses user-entered limit prices for local simulated fills, does not connect to live market matching, does not connect to real brokers, and does not place real securities orders. Real-time quotes, historical quotes, candlesticks, automatic matching, backtesting, strategy execution, authentication/authorization, production deployment, and real brokerage access are planned for later milestones.
 
 ### Safety Notice
 

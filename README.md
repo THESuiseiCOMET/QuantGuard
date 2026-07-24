@@ -41,7 +41,7 @@ QuantGuard/
 - 投资组合列表、账户筛选、创建和当前组合选择；
 - 当前组合的持仓列表；
 - 风险配置读取、创建和更新；
-- 模拟订单页面，支持按组合读取订单、读取真实证券标的、创建模拟限价订单，并展示冻结金额、冻结数量、状态和拒绝原因；
+- 模拟订单页面，支持按组合读取订单、读取真实证券标的、创建模拟限价订单、执行 OPEN 订单、取消 OPEN 订单，展示执行结果，并刷新真实账户资金和持仓；
 - 成交、资金流水和后续模块的占位路由。
 
 ### 技术栈
@@ -124,7 +124,7 @@ QuantGuard 正在开发中。
 
 后端核心模拟链路已经覆盖模拟账户、投资组合、证券标的、订单、成交、资金流水和风控检查。
 
-前端 V1 基础能力已完成总览、模拟账户、投资组合、持仓、风险配置和模拟订单管理。风险配置支持读取、创建和更新；`maxPositionRatio` 当前仅保存，尚未参与订单风控。订单执行与取消、成交记录、资金流水页面和实时行情将在后续前端里程碑继续开发。
+前端 V1 基础能力已完成总览、模拟账户、投资组合、持仓、风险配置和模拟订单管理。风险配置支持读取、创建和更新；`maxPositionRatio` 当前仅保存，尚未参与订单风控。订单执行使用订单限价进行本地模拟成交，不代表真实市场撮合。独立成交记录页面、独立资金流水页面、实时行情和历史 K 线将在后续前端里程碑继续开发。
 
 ### 安全说明
 
@@ -177,7 +177,7 @@ Current frontend pages include:
 - investment portfolio list, account filter, creation, and current selection;
 - portfolio position list for the current selected portfolio;
 - risk configuration read, create, and update flows;
-- simulated order management, including portfolio-scoped order loading, real security instrument loading, simulated limit order creation, frozen cash/quantity display, status, and rejection reason display;
+- simulated order management, including portfolio-scoped order loading, real security instrument loading, simulated limit order creation, OPEN order execution, OPEN order cancellation, execution result display, and real account cash and position refreshes;
 - placeholder routes for trades, cash ledger, and later modules.
 
 ### Tech Stack
@@ -260,7 +260,7 @@ QuantGuard is in active development.
 
 The backend core simulation loop is implemented through simulated accounts, portfolios, instruments, orders, trades, cash ledger records, and risk checks.
 
-The frontend V1 foundation covers dashboard, simulation accounts, investment portfolios, positions, risk configuration, and simulated order management. Risk configuration supports reading, creation, and updates; `maxPositionRatio` is currently stored only and is not yet enforced during order risk checks. Order execution and cancellation, trade records, cash ledger screens, and real-time quotes are planned for later frontend milestones.
+The frontend V1 foundation covers dashboard, simulation accounts, investment portfolios, positions, risk configuration, and simulated order management. Risk configuration supports reading, creation, and updates; `maxPositionRatio` is currently stored only and is not yet enforced during order risk checks. Order execution uses the order limit price for local simulated fills and does not represent live market matching. Dedicated trade record screens, cash ledger screens, real-time quotes, and historical candlesticks are planned for later frontend milestones.
 
 ### Safety Notice
 

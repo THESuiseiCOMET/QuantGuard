@@ -111,15 +111,16 @@ npm run build
 - 投资组合列表、账户筛选、创建和当前组合选择；
 - 当前组合的持仓列表；
 - 风险配置读取、创建和更新；
-- 模拟订单页面，支持按组合读取订单、读取真实证券标的、创建模拟限价订单，并展示冻结金额、冻结数量、状态和拒绝原因；
+- 模拟订单页面，支持按组合读取订单、读取真实证券标的、创建模拟限价订单、执行 OPEN 订单、取消 OPEN 订单，展示执行结果，并刷新真实账户资金和持仓；
 - 账户、投资组合、持仓、风险配置、证券标的和模拟订单的类型化 API 封装。
 
 尚未实现：
 
-- 订单执行与取消页面；
-- 成交记录页面；
-- 资金流水页面；
+- 独立成交记录页面；
+- 独立资金流水页面；
 - 真实行情；
+- 历史 K 线；
+- 自动撮合；
 - 浮动盈亏计算。
 
 说明：`maxPositionRatio` 当前仅保存配置，现阶段后端尚未执行最大仓位比例检查。
@@ -237,15 +238,16 @@ Implemented:
 - investment portfolio list, account filter, creation, and current selection;
 - portfolio position list for the selected current portfolio;
 - risk configuration read, create, and update flows;
-- simulated order management, including portfolio-scoped order loading, real security instrument loading, simulated limit order creation, frozen cash/quantity display, status, and rejection reason display;
+- simulated order management, including portfolio-scoped order loading, real security instrument loading, simulated limit order creation, OPEN order execution, OPEN order cancellation, execution result display, and real account cash and position refreshes;
 - typed API shells for accounts, portfolios, positions, risk configuration, security instruments, and simulated orders.
 
 Not implemented yet:
 
-- order execution and cancellation screen;
-- trade record page;
-- cash ledger page;
+- dedicated trade record screen;
+- dedicated cash ledger screen;
 - real-time quotes;
+- historical candlesticks;
+- automatic matching;
 - floating P/L calculations.
 
-Note: `maxPositionRatio` is currently stored only. The backend does not yet enforce maximum position ratio checks.
+Note: order execution uses the order limit price for local simulated fills and does not represent live market matching. `maxPositionRatio` is currently stored only. The backend does not yet enforce maximum position ratio checks.

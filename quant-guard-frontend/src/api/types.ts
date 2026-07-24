@@ -15,3 +15,4 @@ export type {
   OrderType,
   SimulatedOrder,
 } from '@/types/order'
+export type { ExecuteSimulatedOrderResponse, SimulatedTrade } from '@/types/trade'

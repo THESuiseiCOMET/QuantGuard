@@ -29,8 +29,42 @@ jobs:
       - name: Make Maven wrapper executable
         run: chmod +x mvnw
 
+      - name: Verify Docker is available
+        run: docker info
+
       - name: Run backend integration tests
         run: ./mvnw --batch-mode -P integration verify
+
+      - name: Verify integration tests were not skipped
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+          import xml.etree.ElementTree as ET
+
+          reports = list(Path("target/failsafe-reports").glob("*.xml"))
+          if not reports:
+              print("No Failsafe XML reports found.")
+              sys.exit(1)
+
+          total_tests = 0
+          total_skipped = 0
+          for report in reports:
+              root = ET.parse(report).getroot()
+              total_tests += int(root.attrib.get("tests", "0"))
+              total_skipped += int(root.attrib.get("skipped", "0"))
+
+          print(f"Integration tests run: {total_tests}")
+          print(f"Integration tests skipped: {total_skipped}")
+
+          if total_tests < 6:
+              print("Expected at least 6 integration tests.")
+              sys.exit(1)
+          if total_skipped != 0:
+              print("Integration tests must not be skipped in GitHub Actions.")
+              sys.exit(1)
+          PY
 
       - name: Upload test reports on failure
         if: failure()

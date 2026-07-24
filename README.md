@@ -64,6 +64,17 @@ USE quant_guard;
 
 `V5_1__harden_cash_ledger.sql` 是增量加固脚本：它会调整 `cash_ledger` 的合法流水类型，并新增 `(order_id, entry_type)` 唯一约束。该脚本应在 V5 后手动执行一次，不是可无限重复执行的脚本。
 
+执行 V5.1 前，先检查是否存在重复流水：
+
+```sql
+SELECT order_id, entry_type, COUNT(*) AS duplicate_count
+FROM cash_ledger
+GROUP BY order_id, entry_type
+HAVING COUNT(*) > 1;
+```
+
+只有查询结果为空时，才执行 `V5_1__harden_cash_ledger.sql`。如果存在重复数据，不要自动删除或合并，先人工确认哪些流水应该保留。
+
 ## 本地配置
 
 可提交的配置模板：

@@ -34,6 +34,12 @@ Frontend development is intentionally deferred until the user resumes and confir
    - Creates the `simulated_trade` and `cash_ledger` tables.
    - Uses `USE quant_guard;`.
 
+7. `src/main/resources/db/migration/V5_1__harden_cash_ledger.sql`
+   - Extends `cash_ledger.entry_type` with `BUY_ORDER_FREEZE`.
+   - Adds `uk_cash_ledger_order_entry_type`.
+   - Uses `USE quant_guard;`.
+   - Must be executed once after V5; this ALTER TABLE script is not repeatable.
+
 ## Completed Milestones
 
 ### Initial Backend And Simulation Accounts
@@ -119,6 +125,27 @@ Frontend development is intentionally deferred until the user resumes and confir
   - Failures: 0
   - Errors: 0
   - MySQL/Testcontainers transaction integration tests: not executed in this milestone.
+
+### V5 Cash Ledger Audit And Transaction Hardening
+
+- Commit: `609a6c2 fix: complete cash ledger audit and verify transactions`
+- Result:
+  - BUY order creation now records `BUY_ORDER_FREEZE` cash ledger entries in the same transaction as risk checks, account cash freeze, and `simulated_order` creation.
+  - SELL order creation still does not create cash ledger entries because SELL submission only freezes position quantity.
+  - Cash ledger insert failures and duplicate ledger entries throw business exceptions and rely on the surrounding transaction to roll back account, order, trade, or position changes.
+  - Added V5.1 manual migration for `BUY_ORDER_FREEZE` and `(order_id, entry_type)` uniqueness.
+  - Added Testcontainers MySQL integration tests for rollback and concurrency behavior without connecting to local MySQL or `application-local.yaml`.
+- Validation:
+  - `.\mvnw.cmd clean test`
+  - Tests run: 89
+  - Failures: 0
+  - Errors: 0
+  - Skipped: 0
+  - `.\mvnw.cmd -P integration verify`
+  - Unit/Web tests run before failsafe: 89
+  - Testcontainers integration tests discovered: 6
+  - Local Docker availability: unavailable on this machine, so integration tests were skipped locally.
+  - Local integration command result: build success with 6 skipped integration tests.
 
 ## Main APIs
 

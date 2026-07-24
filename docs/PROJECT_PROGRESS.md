@@ -129,12 +129,21 @@ Frontend development is intentionally deferred until the user resumes and confir
 ### V5 Cash Ledger Audit And Transaction Hardening
 
 - Commit: `609a6c2 fix: complete cash ledger audit and verify transactions`
+- Final hardening commit: `258256d test: fix integration CI container setup`
 - Result:
   - BUY order creation now records `BUY_ORDER_FREEZE` cash ledger entries in the same transaction as risk checks, account cash freeze, and `simulated_order` creation.
   - SELL order creation still does not create cash ledger entries because SELL submission only freezes position quantity.
   - Cash ledger insert failures and duplicate ledger entries throw business exceptions and rely on the surrounding transaction to roll back account, order, trade, or position changes.
   - Added V5.1 manual migration for `BUY_ORDER_FREEZE` and `(order_id, entry_type)` uniqueness.
   - Added Testcontainers MySQL integration tests for rollback and concurrency behavior without connecting to local MySQL or `application-local.yaml`.
+  - Testcontainers MySQL 8 temporary database starts successfully in GitHub Actions.
+  - V1, V2, V3, V4, V5, and V5.1 database scripts execute successfully in the temporary MySQL database.
+  - BUY order cash ledger failure rolls back account cash and simulated order creation.
+  - BUY execution failure rolls back order status, cash, position, trade, and cash ledger changes.
+  - SELL execution failure rolls back order status, cash, position, trade, and cash ledger changes.
+  - Concurrent execution of the same order allows at most one successful operation.
+  - Concurrent execute and cancel operations on the same order allow at most one successful operation.
+  - V5 transaction closure has been verified remotely.
 - Validation:
   - `.\mvnw.cmd clean test`
   - Tests run: 89
@@ -146,6 +155,22 @@ Frontend development is intentionally deferred until the user resumes and confir
   - Testcontainers integration tests discovered: 6
   - Local Docker availability: unavailable on this machine, so integration tests were skipped locally.
   - Local integration command result: build success with 6 skipped integration tests.
+  - Remote workflow: `QuantGuard Backend Integration CI #2`
+  - Remote commit: `258256d`
+  - Remote branch: `main`
+  - Remote job: `integration-test`
+  - Remote status: Success
+  - Remote Testcontainers MySQL integration tests run: 6
+  - Remote Failures: 0
+  - Remote Errors: 0
+  - Remote Skipped: 0
+  - Remote integration tests were not skipped.
+- Remaining boundaries:
+  - QuantGuard is still a local simulated trading system.
+  - V5 is not real exchange matching.
+  - V5 does not connect to real market data or real brokers.
+  - `V5_1__harden_cash_ledger.sql` still needs to be executed once manually in the user's actual MySQL database after duplicate ledger checks pass.
+  - Historical BUY orders are not automatically backfilled with `BUY_ORDER_FREEZE` cash ledger records.
 
 ## Main APIs
 

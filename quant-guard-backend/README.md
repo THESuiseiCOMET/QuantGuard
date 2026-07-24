@@ -174,6 +174,7 @@ GET /api/positions/{id}
 
 ```text
 POST /api/risk-configs
+PUT  /api/risk-configs/{id}
 GET  /api/risk-configs/{id}
 GET  /api/portfolios/{portfolioId}/risk-config
 ```
@@ -493,6 +494,7 @@ Risk configuration:
 
 ```text
 POST /api/risk-configs
+PUT  /api/risk-configs/{id}
 GET  /api/risk-configs/{id}
 GET  /api/portfolios/{portfolioId}/risk-config
 ```

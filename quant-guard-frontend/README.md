@@ -110,17 +110,19 @@ npm run build
 - 模拟账户列表和创建；
 - 投资组合列表、账户筛选、创建和当前组合选择；
 - 当前组合的持仓列表；
+- 风险配置读取、创建和更新；
 - 账户、投资组合和持仓的类型化 API 封装。
 
 尚未实现：
 
-- 风险配置页面；
 - 模拟订单表单；
 - 订单记录页面；
 - 成交记录页面；
 - 资金流水页面；
 - 真实行情；
 - 浮动盈亏计算。
+
+说明：`maxPositionRatio` 当前仅保存配置，现阶段后端尚未执行最大仓位比例检查。
 
 ---
 
@@ -234,14 +236,16 @@ Implemented:
 - simulation account list and creation;
 - investment portfolio list, account filter, creation, and current selection;
 - portfolio position list for the selected current portfolio;
+- risk configuration read, create, and update flows;
 - typed API shells for accounts, portfolios, and positions.
 
 Not implemented yet:
 
-- risk configuration page;
 - simulated order form;
 - order record page;
 - trade record page;
 - cash ledger page;
 - real-time quotes;
 - floating P/L calculations.
+
+Note: `maxPositionRatio` is currently stored only. The backend does not yet enforce maximum position ratio checks.

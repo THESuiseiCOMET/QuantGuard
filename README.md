@@ -40,7 +40,8 @@ QuantGuard/
 - 模拟账户列表和创建；
 - 投资组合列表、账户筛选、创建和当前组合选择；
 - 当前组合的持仓列表；
-- 订单、成交、资金流水、风险管理和后续模块的占位路由。
+- 风险配置读取、创建和更新；
+- 订单、成交、资金流水和后续模块的占位路由。
 
 ### 技术栈
 
@@ -122,7 +123,7 @@ QuantGuard 正在开发中。
 
 后端核心模拟链路已经覆盖模拟账户、投资组合、证券标的、订单、成交、资金流水和风控检查。
 
-前端 V1 基础能力已完成总览、模拟账户、投资组合和持仓。风险配置、模拟订单、成交记录和资金流水页面将在后续前端里程碑继续开发。
+前端 V1 基础能力已完成总览、模拟账户、投资组合、持仓和风险配置。风险配置支持读取、创建和更新；`maxPositionRatio` 当前仅保存，尚未参与订单风控。模拟订单、成交记录和资金流水页面将在后续前端里程碑继续开发。
 
 ### 安全说明
 
@@ -174,7 +175,8 @@ Current frontend pages include:
 - simulation account list and creation;
 - investment portfolio list, account filter, creation, and current selection;
 - portfolio position list for the current selected portfolio;
-- placeholder routes for orders, trades, cash ledger, risk management, and later modules.
+- risk configuration read, create, and update flows;
+- placeholder routes for orders, trades, cash ledger, and later modules.
 
 ### Tech Stack
 
@@ -256,7 +258,7 @@ QuantGuard is in active development.
 
 The backend core simulation loop is implemented through simulated accounts, portfolios, instruments, orders, trades, cash ledger records, and risk checks.
 
-The frontend V1 foundation covers dashboard, simulation accounts, investment portfolios, and positions. Risk configuration, simulated orders, trade records, and cash ledger screens are planned for later frontend milestones.
+The frontend V1 foundation covers dashboard, simulation accounts, investment portfolios, positions, and risk configuration. Risk configuration supports reading, creation, and updates; `maxPositionRatio` is currently stored only and is not yet enforced during order risk checks. Simulated orders, trade records, and cash ledger screens are planned for later frontend milestones.
 
 ### Safety Notice
 

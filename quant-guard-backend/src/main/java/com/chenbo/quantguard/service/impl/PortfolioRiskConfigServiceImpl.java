@@ -3,6 +3,7 @@ package com.chenbo.quantguard.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.chenbo.quantguard.dto.CreatePortfolioRiskConfigRequest;
 import com.chenbo.quantguard.dto.PortfolioRiskConfigResponse;
+import com.chenbo.quantguard.dto.UpdatePortfolioRiskConfigRequest;
 import com.chenbo.quantguard.entity.InvestmentPortfolio;
 import com.chenbo.quantguard.entity.PortfolioRiskConfig;
 import com.chenbo.quantguard.enums.AccountStatus;
@@ -64,6 +65,29 @@ public class PortfolioRiskConfigServiceImpl implements PortfolioRiskConfigServic
             portfolioRiskConfigMapper.insert(config);
         } catch (DuplicateKeyException ex) {
             throw new DuplicateResourceException("Portfolio risk config already exists");
+        }
+
+        return PortfolioRiskConfigResponse.from(config);
+    }
+
+    @Override
+    @Transactional
+    public PortfolioRiskConfigResponse update(Long id, UpdatePortfolioRiskConfigRequest request) {
+        PortfolioRiskConfig config = portfolioRiskConfigMapper.selectById(id);
+        if (config == null) {
+            throw new ResourceNotFoundException("Portfolio risk config not found");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        config.setMaxSingleOrderAmount(request.maxSingleOrderAmount());
+        config.setMaxPositionRatio(request.maxPositionRatio());
+        config.setAllowBuy(request.allowBuy());
+        config.setAllowSell(request.allowSell());
+        config.setUpdatedAt(now);
+
+        int updatedRows = portfolioRiskConfigMapper.updateById(config);
+        if (updatedRows != 1) {
+            throw new BusinessRuleException("Portfolio risk config update failed");
         }
 
         return PortfolioRiskConfigResponse.from(config);

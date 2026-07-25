@@ -12,9 +12,21 @@
     <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false" />
 
     <div class="surface section-body">
-      <el-table v-loading="loading" :data="accounts" row-key="id" empty-text="暂无模拟账户">
+      <el-table
+        v-loading="loading"
+        :data="accounts"
+        row-key="id"
+        empty-text="暂无模拟账户"
+        max-height="calc(100vh - 240px)"
+        table-layout="fixed"
+      >
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="accountName" label="账户名称" min-width="160" />
+        <el-table-column
+          prop="accountName"
+          label="账户名称"
+          min-width="160"
+          show-overflow-tooltip
+        />
         <el-table-column label="账户类型" width="130">
           <template #default="{ row }: { row: SimulationAccount }">
             <el-tag effect="plain">{{ accountTypeLabel(row.accountType) }}</el-tag>
@@ -42,20 +54,52 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" min-width="180">
+        <el-table-column label="创建时间" min-width="170" show-overflow-tooltip>
           <template #default="{ row }: { row: SimulationAccount }">
             {{ formatDateTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="更新时间" min-width="180">
+        <el-table-column label="更新时间" min-width="170" show-overflow-tooltip>
           <template #default="{ row }: { row: SimulationAccount }">
             {{ formatDateTime(row.updatedAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="180" fixed="right">
+          <template #default="{ row }: { row: SimulationAccount }">
+            <div class="row-actions">
+              <el-button
+                v-if="row.status === 'ACTIVE'"
+                link
+                type="warning"
+                :loading="operatingId === row.id"
+                @click="disableAccount(row)"
+              >
+                停用
+              </el-button>
+              <el-button
+                v-else
+                link
+                type="success"
+                :loading="operatingId === row.id"
+                @click="restoreAccount(row)"
+              >
+                恢复
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                :loading="operatingId === row.id"
+                @click="removeAccount(row)"
+              >
+                删除
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
     </div>
 
-    <el-dialog v-model="dialogVisible" title="创建模拟账户" width="460px">
+    <el-dialog v-model="dialogVisible" title="创建模拟账户" width="min(460px, calc(100vw - 32px))">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="92px">
         <el-form-item label="账户名称" prop="accountName">
           <el-input v-model="form.accountName" maxlength="64" placeholder="例如：长期模拟账户" />
@@ -88,10 +132,11 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyText from '@/components/common/MoneyText.vue'
-import { createAccount, listAccounts } from '@/api/account'
+import { createAccount, deleteAccount, listAccounts, updateAccountStatus } from '@/api/account'
+import { usePortfolioStore } from '@/stores/portfolio'
 import type {
   AccountStatus,
   AccountType,
@@ -100,8 +145,10 @@ import type {
 } from '@/types/account'
 
 const accounts = ref<SimulationAccount[]>([])
+const portfolioStore = usePortfolioStore()
 const loading = ref(false)
 const submitting = ref(false)
+const operatingId = ref<number | null>(null)
 const dialogVisible = ref(false)
 const errorMessage = ref('')
 const formRef = ref<FormInstance>()
@@ -172,6 +219,54 @@ async function submitCreate() {
   }
 }
 
+async function disableAccount(account: SimulationAccount) {
+  await ElMessageBox.confirm(
+    `停用后不能再通过该账户创建组合或订单，历史数据仍会保留。\n\n确认停用“${account.accountName}”？`,
+    '停用模拟账户',
+    { confirmButtonText: '停用', cancelButtonText: '取消', type: 'warning' },
+  )
+  await operateAccount(account.id, async () => {
+    await updateAccountStatus(account.id, 'DISABLED')
+    portfolioStore.clearAccountIfSelected(account.id)
+    ElMessage.success('账户已停用')
+  })
+}
+
+async function restoreAccount(account: SimulationAccount) {
+  await operateAccount(account.id, async () => {
+    await updateAccountStatus(account.id, 'ACTIVE')
+    ElMessage.success('账户已恢复')
+  })
+}
+
+async function removeAccount(account: SimulationAccount) {
+  await ElMessageBox.confirm(
+    `永久删除空账户“${account.accountName}”？\n此操作不可恢复。包含历史业务数据的账户不会被删除。`,
+    '永久删除模拟账户',
+    { confirmButtonText: '永久删除', cancelButtonText: '取消', type: 'error' },
+  )
+  await operateAccount(account.id, async () => {
+    try {
+      await deleteAccount(account.id)
+      portfolioStore.clearAccountIfSelected(account.id)
+      ElMessage.success('账户已删除')
+    } catch (error) {
+      ElMessage.warning('删除失败，可改为停用。')
+      throw error
+    }
+  })
+}
+
+async function operateAccount(accountId: number, operation: () => Promise<void>) {
+  operatingId.value = accountId
+  try {
+    await operation()
+    await loadAccounts()
+  } finally {
+    operatingId.value = null
+  }
+}
+
 function openCreateDialog() {
   resetForm()
   dialogVisible.value = true
@@ -222,10 +317,18 @@ function formatDateTime(value: string) {
 
 <style scoped>
 .section-body {
+  min-width: 0;
   padding: 16px;
 }
 
 .full-width {
   width: 100%;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 </style>

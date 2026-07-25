@@ -1,10 +1,12 @@
 <template>
   <div class="page-header">
-    <div>
+    <div class="page-header-copy">
       <h1>{{ title }}</h1>
       <p v-if="description">{{ description }}</p>
     </div>
-    <slot name="actions" />
+    <div class="page-header-actions">
+      <slot name="actions" />
+    </div>
   </div>
 </template>
 
@@ -21,6 +23,25 @@ defineProps<{
   gap: 16px;
   align-items: flex-start;
   justify-content: space-between;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.page-header-copy {
+  min-width: 240px;
+  flex: 1 1 360px;
+}
+
+.page-header-actions {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  justify-content: flex-end;
+}
+
+.page-header-actions :deep(.el-space) {
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 h1 {
@@ -31,5 +52,13 @@ h1 {
 p {
   margin: 6px 0 0;
   color: var(--qg-text-muted);
+}
+
+@media (max-width: 760px) {
+  .page-header-actions,
+  .page-header-actions :deep(.el-space) {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 </style>

@@ -4,11 +4,17 @@ import com.vanyiung.quantguard.dto.CreateInvestmentPortfolioRequest;
 import com.vanyiung.quantguard.dto.InvestmentPortfolioResponse;
 import com.vanyiung.quantguard.entity.InvestmentPortfolio;
 import com.vanyiung.quantguard.entity.SimulationAccount;
+import com.vanyiung.quantguard.enums.AccountStatus;
 import com.vanyiung.quantguard.enums.AccountType;
 import com.vanyiung.quantguard.exception.BusinessRuleException;
 import com.vanyiung.quantguard.exception.DuplicateResourceException;
 import com.vanyiung.quantguard.exception.ResourceNotFoundException;
+import com.vanyiung.quantguard.mapper.CashLedgerMapper;
 import com.vanyiung.quantguard.mapper.InvestmentPortfolioMapper;
+import com.vanyiung.quantguard.mapper.PortfolioPositionMapper;
+import com.vanyiung.quantguard.mapper.PortfolioRiskConfigMapper;
+import com.vanyiung.quantguard.mapper.SimulatedOrderMapper;
+import com.vanyiung.quantguard.mapper.SimulatedTradeMapper;
 import com.vanyiung.quantguard.mapper.SimulationAccountMapper;
 import com.vanyiung.quantguard.service.impl.InvestmentPortfolioServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,11 +40,27 @@ class InvestmentPortfolioServiceImplTest {
     @Mock
     private SimulationAccountMapper simulationAccountMapper;
 
+    @Mock
+    private PortfolioPositionMapper portfolioPositionMapper;
+
+    @Mock
+    private PortfolioRiskConfigMapper portfolioRiskConfigMapper;
+
+    @Mock
+    private SimulatedOrderMapper simulatedOrderMapper;
+
+    @Mock
+    private SimulatedTradeMapper simulatedTradeMapper;
+
+    @Mock
+    private CashLedgerMapper cashLedgerMapper;
+
     private InvestmentPortfolioServiceImpl investmentPortfolioService;
 
     @BeforeEach
     void setUp() {
-        investmentPortfolioService = new InvestmentPortfolioServiceImpl(investmentPortfolioMapper, simulationAccountMapper);
+        investmentPortfolioService = new InvestmentPortfolioServiceImpl(investmentPortfolioMapper, simulationAccountMapper,
+                portfolioPositionMapper, portfolioRiskConfigMapper, simulatedOrderMapper, simulatedTradeMapper, cashLedgerMapper);
     }
 
     @Test
@@ -79,6 +102,16 @@ class InvestmentPortfolioServiceImplTest {
     }
 
     @Test
+    void createRejectsDisabledAccount() {
+        SimulationAccount account = account(1L, AccountType.LONG_TERM);
+        account.setStatus(AccountStatus.DISABLED);
+        when(simulationAccountMapper.selectById(1L)).thenReturn(account);
+
+        assertThrows(BusinessRuleException.class, () -> investmentPortfolioService.create(
+                new CreateInvestmentPortfolioRequest(1L, "Core ETF", AccountType.LONG_TERM, null)));
+    }
+
+    @Test
     void createRejectsDuplicateNameInSameAccount() {
         when(simulationAccountMapper.selectById(1L)).thenReturn(account(1L, AccountType.LONG_TERM));
         when(investmentPortfolioMapper.exists(any())).thenReturn(true);
@@ -111,10 +144,143 @@ class InvestmentPortfolioServiceImplTest {
         assertThrows(ResourceNotFoundException.class, () -> investmentPortfolioService.getById(999L));
     }
 
+    @Test
+    void emptyPortfolioCanBeDeleted() {
+        when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
+        when(portfolioPositionMapper.exists(any())).thenReturn(false);
+        when(portfolioRiskConfigMapper.exists(any())).thenReturn(false);
+        when(simulatedOrderMapper.exists(any())).thenReturn(false);
+        when(simulatedTradeMapper.exists(any())).thenReturn(false);
+        when(cashLedgerMapper.exists(any())).thenReturn(false);
+        when(investmentPortfolioMapper.deleteById(10L)).thenReturn(1);
+
+        investmentPortfolioService.delete(10L);
+
+        verify(investmentPortfolioMapper).deleteById(10L);
+    }
+
+    @Test
+    void portfolioWithRiskConfigCannotBeDeleted() {
+        when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
+        when(portfolioPositionMapper.exists(any())).thenReturn(false);
+        when(portfolioRiskConfigMapper.exists(any())).thenReturn(true);
+
+        assertThrows(BusinessRuleException.class, () -> investmentPortfolioService.delete(10L));
+
+        verify(investmentPortfolioMapper, never()).deleteById(10L);
+    }
+
+    @Test
+    void portfolioWithPositionCannotBeDeleted() {
+        when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
+        when(portfolioPositionMapper.exists(any())).thenReturn(true);
+
+        assertThrows(BusinessRuleException.class, () -> investmentPortfolioService.delete(10L));
+
+        verify(investmentPortfolioMapper, never()).deleteById(10L);
+    }
+
+    @Test
+    void portfolioWithOrderCannotBeDeleted() {
+        when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
+        when(portfolioPositionMapper.exists(any())).thenReturn(false);
+        when(portfolioRiskConfigMapper.exists(any())).thenReturn(false);
+        when(simulatedOrderMapper.exists(any())).thenReturn(true);
+
+        assertThrows(BusinessRuleException.class, () -> investmentPortfolioService.delete(10L));
+
+        verify(investmentPortfolioMapper, never()).deleteById(10L);
+    }
+
+    @Test
+    void portfolioWithTradeCannotBeDeleted() {
+        when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
+        when(portfolioPositionMapper.exists(any())).thenReturn(false);
+        when(portfolioRiskConfigMapper.exists(any())).thenReturn(false);
+        when(simulatedOrderMapper.exists(any())).thenReturn(false);
+        when(simulatedTradeMapper.exists(any())).thenReturn(true);
+
+        assertThrows(BusinessRuleException.class, () -> investmentPortfolioService.delete(10L));
+
+        verify(investmentPortfolioMapper, never()).deleteById(10L);
+    }
+
+    @Test
+    void portfolioWithCashLedgerCannotBeDeleted() {
+        when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
+        when(portfolioPositionMapper.exists(any())).thenReturn(false);
+        when(portfolioRiskConfigMapper.exists(any())).thenReturn(false);
+        when(simulatedOrderMapper.exists(any())).thenReturn(false);
+        when(simulatedTradeMapper.exists(any())).thenReturn(false);
+        when(cashLedgerMapper.exists(any())).thenReturn(true);
+
+        assertThrows(BusinessRuleException.class, () -> investmentPortfolioService.delete(10L));
+
+        verify(investmentPortfolioMapper, never()).deleteById(10L);
+    }
+
+    @Test
+    void portfolioWithOpenOrderCannotBeDisabled() {
+        when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
+        when(simulatedOrderMapper.exists(any())).thenReturn(true);
+
+        assertThrows(BusinessRuleException.class,
+                () -> investmentPortfolioService.updateStatus(10L, AccountStatus.DISABLED));
+
+        verify(investmentPortfolioMapper, never()).updateById(any(InvestmentPortfolio.class));
+    }
+
+    @Test
+    void portfolioWithFrozenPositionCannotBeDisabled() {
+        when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
+        when(simulatedOrderMapper.exists(any())).thenReturn(false);
+        when(portfolioPositionMapper.exists(any())).thenReturn(true);
+
+        assertThrows(BusinessRuleException.class,
+                () -> investmentPortfolioService.updateStatus(10L, AccountStatus.DISABLED));
+
+        verify(investmentPortfolioMapper, never()).updateById(any(InvestmentPortfolio.class));
+    }
+
+    @Test
+    void portfolioCanBeDisabled() {
+        when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
+        when(simulatedOrderMapper.exists(any())).thenReturn(false);
+        when(portfolioPositionMapper.exists(any())).thenReturn(false);
+        when(investmentPortfolioMapper.updateById(any(InvestmentPortfolio.class))).thenReturn(1);
+
+        InvestmentPortfolioResponse response = investmentPortfolioService.updateStatus(10L, AccountStatus.DISABLED);
+
+        assertEquals(AccountStatus.DISABLED, response.status());
+    }
+
+    @Test
+    void disabledPortfolioCanBeRestored() {
+        InvestmentPortfolio portfolio = portfolio();
+        portfolio.setStatus(AccountStatus.DISABLED);
+        when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio);
+        when(investmentPortfolioMapper.updateById(any(InvestmentPortfolio.class))).thenReturn(1);
+
+        InvestmentPortfolioResponse response = investmentPortfolioService.updateStatus(10L, AccountStatus.ACTIVE);
+
+        assertEquals(AccountStatus.ACTIVE, response.status());
+    }
+
     private SimulationAccount account(Long id, AccountType accountType) {
         SimulationAccount account = new SimulationAccount();
         account.setId(id);
         account.setAccountType(accountType);
+        account.setStatus(AccountStatus.ACTIVE);
         return account;
+    }
+
+    private InvestmentPortfolio portfolio() {
+        InvestmentPortfolio portfolio = new InvestmentPortfolio();
+        portfolio.setId(10L);
+        portfolio.setAccountId(1L);
+        portfolio.setPortfolioName("Core ETF");
+        portfolio.setPortfolioType(AccountType.LONG_TERM);
+        portfolio.setStatus(AccountStatus.ACTIVE);
+        return portfolio;
     }
 }

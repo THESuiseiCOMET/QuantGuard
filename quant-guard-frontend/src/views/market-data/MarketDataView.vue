@@ -145,7 +145,11 @@
       </main>
     </div>
 
-    <el-dialog v-model="dialogVisible" title="批量导入 A 股证券" width="960px">
+    <el-dialog
+      v-model="dialogVisible"
+      title="批量导入 A 股证券"
+      width="min(960px, calc(100vw - 32px))"
+    >
       <el-form label-position="top">
         <el-form-item label="股票代码">
           <el-input
@@ -184,6 +188,7 @@
         :data="previewItems"
         row-key="originalInput"
         max-height="280"
+        table-layout="fixed"
       >
         <el-table-column prop="originalInput" label="原始输入" width="120" />
         <el-table-column prop="canonicalCode" label="标准代码" width="120" />
@@ -218,6 +223,7 @@
         :data="importResults"
         row-key="canonicalCode"
         max-height="260"
+        table-layout="fixed"
       >
         <el-table-column prop="canonicalCode" label="标准代码" width="120" />
         <el-table-column prop="instrumentName" label="股票名称" min-width="150" />
@@ -640,6 +646,8 @@ function formatDateTime(value: string | null | undefined) {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
   padding: 12px 16px;
 }
 
@@ -648,6 +656,9 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 .dialog-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
   display: flex;
   justify-content: flex-end;
   gap: 12px;

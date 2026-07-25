@@ -310,7 +310,14 @@
         <span>按当前投资组合读取</span>
       </div>
 
-      <el-table v-loading="loading" :data="orders" row-key="id" empty-text="暂无模拟订单">
+      <el-table
+        v-loading="loading"
+        :data="orders"
+        row-key="id"
+        empty-text="暂无模拟订单"
+        max-height="calc(100vh - 320px)"
+        table-layout="fixed"
+      >
         <el-table-column prop="orderNo" label="订单号" min-width="230" show-overflow-tooltip />
         <el-table-column label="证券代码" min-width="140">
           <template #default="{ row }: { row: SimulatedOrder }">
@@ -511,6 +518,8 @@ const submitBlockReason = computed(() => {
   if (!selectedPortfolioId.value) return '请先选择投资组合'
   if (!currentPortfolio.value) return '当前选择的投资组合不存在或已不可用'
   if (!selectedAccountId.value || !currentAccount.value) return '当前账户不存在或已不可用'
+  if (currentAccount.value.status !== 'ACTIVE') return '当前账户已停用，请重新选择启用账户'
+  if (currentPortfolio.value.status !== 'ACTIVE') return '当前投资组合已停用，请重新选择启用组合'
   if (selectionMismatch.value) return '当前账户和投资组合不匹配'
   if (hasNoRiskConfig.value) return '当前组合尚未配置风险规则'
   if (!riskConfig.value) return '风险配置尚未加载'
@@ -767,7 +776,9 @@ function resetOrderForm() {
 function reconcileSelection() {
   const selectedAccountExists =
     portfolioStore.selectedAccountId === null ||
-    accounts.value.some((account) => account.id === portfolioStore.selectedAccountId)
+    accounts.value.some(
+      (account) => account.id === portfolioStore.selectedAccountId && account.status === 'ACTIVE',
+    )
 
   if (!selectedAccountExists) {
     portfolioStore.selectAccount(null)
@@ -777,7 +788,7 @@ function reconcileSelection() {
     (portfolio) => portfolio.id === portfolioStore.selectedPortfolioId,
   )
 
-  if (!selectedPortfolio) {
+  if (!selectedPortfolio || selectedPortfolio.status !== 'ACTIVE') {
     portfolioStore.selectPortfolio(null)
     return
   }
@@ -996,6 +1007,7 @@ function formatDateTime(value: string) {
 .order-form-panel,
 .risk-panel,
 .section-body {
+  min-width: 0;
   padding: 16px;
 }
 
@@ -1005,6 +1017,8 @@ function formatDateTime(value: string) {
   gap: 12px;
   align-items: center;
   justify-content: space-between;
+  min-width: 0;
+  flex-wrap: wrap;
   margin-bottom: 16px;
 }
 

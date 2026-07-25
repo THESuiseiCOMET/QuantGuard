@@ -97,6 +97,8 @@
         :data="filteredTrades"
         row-key="id"
         empty-text="当前投资组合暂无成交记录"
+        max-height="calc(100vh - 320px)"
+        table-layout="fixed"
       >
         <el-table-column prop="tradeNo" label="成交编号" min-width="230" show-overflow-tooltip />
         <el-table-column label="关联订单号" min-width="230" show-overflow-tooltip>
@@ -439,6 +441,7 @@ function formatDateTime(value: string) {
 
 .filter-panel,
 .section-body {
+  min-width: 0;
   padding: 16px;
 }
 
@@ -448,6 +451,8 @@ function formatDateTime(value: string) {
   gap: 12px;
   align-items: center;
   justify-content: space-between;
+  min-width: 0;
+  flex-wrap: wrap;
   margin-bottom: 16px;
 }
 

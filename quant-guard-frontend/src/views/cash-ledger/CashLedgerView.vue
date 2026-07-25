@@ -122,6 +122,8 @@
         :data="filteredLedger"
         row-key="id"
         empty-text="当前账户暂无资金流水"
+        max-height="calc(100vh - 340px)"
+        table-layout="fixed"
       >
         <el-table-column prop="id" label="流水 ID" width="100" />
         <el-table-column label="流水类型" min-width="180" show-overflow-tooltip>
@@ -573,6 +575,7 @@ function formatDateTime(value: string) {
 
 .filter-panel,
 .section-body {
+  min-width: 0;
   padding: 16px;
 }
 
@@ -582,6 +585,8 @@ function formatDateTime(value: string) {
   gap: 12px;
   align-items: center;
   justify-content: space-between;
+  min-width: 0;
+  flex-wrap: wrap;
   margin-bottom: 16px;
 }
 

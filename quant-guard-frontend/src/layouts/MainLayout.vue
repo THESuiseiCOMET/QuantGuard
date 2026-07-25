@@ -1,9 +1,9 @@
 <template>
   <el-container class="main-layout">
-    <el-aside class="sidebar" width="228px">
+    <el-aside class="sidebar" width="var(--qg-sidebar-width)">
       <div class="brand">
         <div class="brand-mark">QG</div>
-        <div>
+        <div class="brand-copy">
           <div class="brand-name">QuantGuard</div>
           <div class="brand-subtitle">模拟交易与风控</div>
         </div>
@@ -17,9 +17,9 @@
       </el-menu>
     </el-aside>
 
-    <el-container>
+    <el-container class="main-pane">
       <el-header class="topbar">
-        <div>
+        <div class="topbar-copy">
           <div class="page-title">{{ pageTitle }}</div>
           <div class="page-subtitle">本地模拟环境，不接入真实交易</div>
         </div>
@@ -72,12 +72,23 @@ const pageTitle = computed(() =>
 
 <style scoped>
 .main-layout {
-  min-height: 100vh;
+  width: 100%;
+  min-width: 0;
+  height: 100vh;
+  overflow: hidden;
+  --qg-sidebar-width: 228px;
 }
 
 .sidebar {
+  min-width: 0;
   color: #fff;
   background: var(--qg-sidebar);
+  overflow: hidden;
+}
+
+.main-pane {
+  min-width: 0;
+  height: 100%;
 }
 
 .brand {
@@ -86,6 +97,10 @@ const pageTitle = computed(() =>
   align-items: center;
   height: 72px;
   padding: 0 18px;
+}
+
+.brand-copy {
+  min-width: 0;
 }
 
 .brand-mark {
@@ -124,10 +139,19 @@ const pageTitle = computed(() =>
 
 .topbar {
   display: flex;
+  gap: 12px;
   align-items: center;
   justify-content: space-between;
+  min-width: 0;
+  height: auto;
+  min-height: 60px;
+  padding-block: 10px;
   border-bottom: 1px solid var(--qg-border);
   background: #fff;
+}
+
+.topbar-copy {
+  min-width: 0;
 }
 
 .page-title {
@@ -142,6 +166,40 @@ const pageTitle = computed(() =>
 }
 
 .content {
+  min-width: 0;
+  overflow: auto;
   padding: 20px;
+}
+
+@media (max-width: 1100px) {
+  .main-layout {
+    --qg-sidebar-width: 72px;
+  }
+
+  .brand {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .brand-copy,
+  .nav-menu :deep(.el-menu-item span) {
+    display: none;
+  }
+
+  .nav-menu :deep(.el-menu-item) {
+    justify-content: center;
+    padding: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .content {
+    padding: 14px;
+  }
 }
 </style>

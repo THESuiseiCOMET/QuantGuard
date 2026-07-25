@@ -43,6 +43,17 @@ export const usePortfolioStore = defineStore('portfolio', {
       this.selectedPortfolioId = portfolioId
       this.persist()
     },
+    clearAccountIfSelected(accountId: number) {
+      if (this.selectedAccountId !== accountId) return
+      this.selectedAccountId = null
+      this.selectedPortfolioId = null
+      this.persist()
+    },
+    clearPortfolioIfSelected(portfolioId: number) {
+      if (this.selectedPortfolioId !== portfolioId) return
+      this.selectedPortfolioId = null
+      this.persist()
+    },
     persist() {
       window.localStorage.setItem(
         storageKey,

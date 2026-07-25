@@ -25,7 +25,14 @@
     />
 
     <div class="surface section-body">
-      <el-table v-loading="loading" :data="positions" row-key="id" empty-text="暂无持仓">
+      <el-table
+        v-loading="loading"
+        :data="positions"
+        row-key="id"
+        empty-text="暂无持仓"
+        max-height="calc(100vh - 240px)"
+        table-layout="fixed"
+      >
         <el-table-column prop="id" label="ID" width="80" />
         <el-table-column prop="portfolioId" label="组合 ID" width="100" />
         <el-table-column prop="instrumentId" label="标的 ID" width="100" />
@@ -108,6 +115,7 @@ async function loadPositions() {
 
 <style scoped>
 .section-body {
+  min-width: 0;
   padding: 16px;
 }
 </style>

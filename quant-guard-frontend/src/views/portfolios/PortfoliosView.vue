@@ -4,7 +4,11 @@
       <template #actions>
         <el-space>
           <el-button :loading="loading" @click="loadPageData">刷新</el-button>
-          <el-button type="primary" :disabled="accounts.length === 0" @click="openCreateDialog">
+          <el-button
+            type="primary"
+            :disabled="activeAccounts.length === 0"
+            @click="openCreateDialog"
+          >
             创建组合
           </el-button>
         </el-space>
@@ -25,7 +29,7 @@
           <el-option
             v-for="account in accounts"
             :key="account.id"
-            :label="account.accountName"
+            :label="accountOptionLabel(account)"
             :value="account.id"
           />
         </el-select>
@@ -38,11 +42,17 @@
         row-key="id"
         empty-text="暂无投资组合"
         highlight-current-row
-        @current-change="handleCurrentChange"
+        max-height="calc(100vh - 300px)"
+        table-layout="fixed"
       >
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="portfolioName" label="组合名称" min-width="180" />
-        <el-table-column label="所属账户" min-width="180">
+        <el-table-column
+          prop="portfolioName"
+          label="组合名称"
+          min-width="170"
+          show-overflow-tooltip
+        />
+        <el-table-column label="所属账户" min-width="170" show-overflow-tooltip>
           <template #default="{ row }: { row: InvestmentPortfolio }">
             {{ accountName(row.accountId) }}
           </template>
@@ -52,7 +62,7 @@
             <el-tag effect="plain">{{ accountTypeLabel(row.portfolioType) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="说明" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="description" label="说明" min-width="180" show-overflow-tooltip />
         <el-table-column label="状态" width="110">
           <template #default="{ row }: { row: InvestmentPortfolio }">
             <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" effect="plain">
@@ -67,15 +77,55 @@
             >
           </template>
         </el-table-column>
+        <el-table-column label="操作" width="220" fixed="right">
+          <template #default="{ row }: { row: InvestmentPortfolio }">
+            <div class="row-actions">
+              <el-button
+                link
+                type="primary"
+                :disabled="row.status !== 'ACTIVE'"
+                @click="selectPortfolio(row)"
+              >
+                选择
+              </el-button>
+              <el-button
+                v-if="row.status === 'ACTIVE'"
+                link
+                type="warning"
+                :loading="operatingId === row.id"
+                @click="disablePortfolio(row)"
+              >
+                停用
+              </el-button>
+              <el-button
+                v-else
+                link
+                type="success"
+                :loading="operatingId === row.id"
+                @click="restorePortfolio(row)"
+              >
+                恢复
+              </el-button>
+              <el-button
+                link
+                type="danger"
+                :loading="operatingId === row.id"
+                @click="removePortfolio(row)"
+              >
+                删除
+              </el-button>
+            </div>
+          </template>
+        </el-table-column>
       </el-table>
     </div>
 
-    <el-dialog v-model="dialogVisible" title="创建投资组合" width="500px">
+    <el-dialog v-model="dialogVisible" title="创建投资组合" width="min(500px, calc(100vw - 32px))">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="92px">
         <el-form-item label="所属账户" prop="accountId">
           <el-select v-model="form.accountId" class="full-width" placeholder="请选择账户">
             <el-option
-              v-for="account in accounts"
+              v-for="account in activeAccounts"
               :key="account.id"
               :label="account.accountName"
               :value="account.id"
@@ -119,10 +169,15 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { listAccounts } from '@/api/account'
-import { createPortfolio, listPortfolios } from '@/api/portfolio'
+import {
+  createPortfolio,
+  deletePortfolio,
+  listPortfolios,
+  updatePortfolioStatus,
+} from '@/api/portfolio'
 import { usePortfolioStore } from '@/stores/portfolio'
 import type { AccountStatus, AccountType, SimulationAccount } from '@/types/account'
 import type { CreateInvestmentPortfolioRequest, InvestmentPortfolio } from '@/types/portfolio'
@@ -133,6 +188,7 @@ const accounts = ref<SimulationAccount[]>([])
 const portfolios = ref<InvestmentPortfolio[]>([])
 const loading = ref(false)
 const submitting = ref(false)
+const operatingId = ref<number | null>(null)
 const dialogVisible = ref(false)
 const errorMessage = ref('')
 const formRef = ref<FormInstance>()
@@ -168,6 +224,10 @@ const filteredPortfolios = computed(() => {
   return portfolios.value.filter((portfolio) => portfolio.accountId === selectedAccountId.value)
 })
 
+const activeAccounts = computed(() =>
+  accounts.value.filter((account) => account.status === 'ACTIVE'),
+)
+
 onMounted(() => {
   void loadPageData()
 })
@@ -201,7 +261,8 @@ function handleAccountChange(accountId: number | null) {
   }
 }
 
-function handleCurrentChange(row?: InvestmentPortfolio) {
+function selectPortfolio(row: InvestmentPortfolio) {
+  if (row.status !== 'ACTIVE') return
   portfolioStore.selectPortfolio(row?.id ?? null)
   portfolioStore.selectAccount(row?.accountId ?? selectedAccountId.value)
   selectedAccountId.value = portfolioStore.selectedAccountId
@@ -209,13 +270,64 @@ function handleCurrentChange(row?: InvestmentPortfolio) {
 
 function openCreateDialog() {
   resetForm()
-  form.accountId = selectedAccountId.value ?? accounts.value[0]?.id ?? 0
+  const selectedAccount = activeAccounts.value.find(
+    (account) => account.id === selectedAccountId.value,
+  )
+  form.accountId = selectedAccount?.id ?? activeAccounts.value[0]?.id ?? 0
   dialogVisible.value = true
 }
 
 function cancelCreate() {
   dialogVisible.value = false
   resetForm()
+}
+
+async function disablePortfolio(portfolio: InvestmentPortfolio) {
+  await ElMessageBox.confirm(
+    `停用后不能再通过该组合创建订单，历史持仓、成交和流水仍会保留。\n\n确认停用“${portfolio.portfolioName}”？`,
+    '停用投资组合',
+    { confirmButtonText: '停用', cancelButtonText: '取消', type: 'warning' },
+  )
+  await operatePortfolio(portfolio.id, async () => {
+    await updatePortfolioStatus(portfolio.id, 'DISABLED')
+    portfolioStore.clearPortfolioIfSelected(portfolio.id)
+    ElMessage.success('组合已停用')
+  })
+}
+
+async function restorePortfolio(portfolio: InvestmentPortfolio) {
+  await operatePortfolio(portfolio.id, async () => {
+    await updatePortfolioStatus(portfolio.id, 'ACTIVE')
+    ElMessage.success('组合已恢复')
+  })
+}
+
+async function removePortfolio(portfolio: InvestmentPortfolio) {
+  await ElMessageBox.confirm(
+    `永久删除空投资组合“${portfolio.portfolioName}”？\n此操作不可恢复。存在持仓、风险配置、订单、成交或流水时，服务端将拒绝删除。`,
+    '永久删除投资组合',
+    { confirmButtonText: '永久删除', cancelButtonText: '取消', type: 'error' },
+  )
+  await operatePortfolio(portfolio.id, async () => {
+    try {
+      await deletePortfolio(portfolio.id)
+      portfolioStore.clearPortfolioIfSelected(portfolio.id)
+      ElMessage.success('组合已删除')
+    } catch (error) {
+      ElMessage.warning('删除失败，可改为停用。')
+      throw error
+    }
+  })
+}
+
+async function operatePortfolio(portfolioId: number, operation: () => Promise<void>) {
+  operatingId.value = portfolioId
+  try {
+    await operation()
+    await loadPageData()
+  } finally {
+    operatingId.value = null
+  }
 }
 
 async function submitCreate() {
@@ -245,7 +357,8 @@ async function submitCreate() {
 }
 
 function resetForm() {
-  form.accountId = selectedAccountId.value ?? 0
+  form.accountId =
+    activeAccounts.value.find((account) => account.id === selectedAccountId.value)?.id ?? 0
   form.portfolioName = ''
   form.portfolioType = 'LONG_TERM'
   form.description = ''
@@ -253,15 +366,20 @@ function resetForm() {
 }
 
 function accountName(accountId: number) {
-  return (
-    accounts.value.find((account) => account.id === accountId)?.accountName ?? `账户 #${accountId}`
-  )
+  const account = accounts.value.find((item) => item.id === accountId)
+  return account ? accountOptionLabel(account) : `账户 #${accountId}`
+}
+
+function accountOptionLabel(account: SimulationAccount) {
+  return account.status === 'ACTIVE' ? account.accountName : `${account.accountName}（已停用）`
 }
 
 function reconcileSelection() {
   const selectedAccountExists =
     portfolioStore.selectedAccountId === null ||
-    accounts.value.some((account) => account.id === portfolioStore.selectedAccountId)
+    accounts.value.some(
+      (account) => account.id === portfolioStore.selectedAccountId && account.status === 'ACTIVE',
+    )
 
   if (!selectedAccountExists) {
     portfolioStore.selectAccount(null)
@@ -271,7 +389,7 @@ function reconcileSelection() {
     (portfolio) => portfolio.id === portfolioStore.selectedPortfolioId,
   )
 
-  if (!selectedPortfolio) {
+  if (!selectedPortfolio || selectedPortfolio.status !== 'ACTIVE') {
     portfolioStore.selectPortfolio(null)
   } else if (portfolioStore.selectedAccountId !== selectedPortfolio.accountId) {
     portfolioStore.selectAccount(selectedPortfolio.accountId)
@@ -297,6 +415,7 @@ function statusLabel(status: AccountStatus) {
 .section-body {
   display: grid;
   gap: 16px;
+  min-width: 0;
   padding: 16px;
 }
 
@@ -304,10 +423,12 @@ function statusLabel(status: AccountStatus) {
   display: flex;
   gap: 12px;
   align-items: center;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .account-select {
-  width: 260px;
+  width: min(260px, 100%);
 }
 
 .hint {
@@ -317,5 +438,12 @@ function statusLabel(status: AccountStatus) {
 
 .full-width {
   width: 100%;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 </style>

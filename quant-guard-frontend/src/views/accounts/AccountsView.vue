@@ -1,98 +1,113 @@
 <template>
   <section class="page">
-    <PageHeader title="模拟账户" description="连接后端真实账户接口，创建和查看本地模拟账户。">
+    <PageHeader title="模拟账户">
       <template #actions>
-        <el-space>
-          <el-button :loading="loading" @click="loadAccounts">刷新</el-button>
-          <el-button type="primary" @click="openCreateDialog">创建账户</el-button>
-        </el-space>
+        <el-button type="primary" @click="openCreateDialog">
+          <el-icon><Plus /></el-icon>
+          创建账户
+        </el-button>
       </template>
     </PageHeader>
 
-    <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false" />
+    <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" />
 
     <div class="surface section-body">
+      <div v-if="selectedAccounts.length > 0" class="bulk-toolbar">
+        <span class="hint">已选 {{ selectedAccounts.length }} 个账户</span>
+        <el-button size="small" :loading="bulkOperating" @click="batchDisableAccounts">
+          批量停用
+        </el-button>
+        <el-button size="small" :loading="bulkOperating" @click="batchRestoreAccounts">
+          批量恢复
+        </el-button>
+        <el-button
+          size="small"
+          type="danger"
+          plain
+          :loading="bulkOperating"
+          @click="batchRemoveAccounts"
+        >
+          批量删除空账户
+        </el-button>
+        <el-button
+          size="small"
+          type="danger"
+          :loading="bulkOperating"
+          @click="batchForceRemoveAccounts"
+        >
+          批量硬删除
+        </el-button>
+      </div>
+
       <el-table
         v-loading="loading"
         :data="accounts"
+        :current-row-key="portfolioStore.selectedAccountId"
         row-key="id"
         empty-text="暂无模拟账户"
-        max-height="calc(100vh - 240px)"
+        highlight-current-row
+        max-height="calc(100vh - 160px)"
         table-layout="fixed"
+        @selection-change="handleSelectionChange"
       >
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column
-          prop="accountName"
-          label="账户名称"
-          min-width="160"
-          show-overflow-tooltip
-        />
-        <el-table-column label="账户类型" width="130">
+        <el-table-column type="selection" width="44" fixed="left" />
+        <el-table-column label="账户" min-width="240">
           <template #default="{ row }: { row: SimulationAccount }">
-            <el-tag effect="plain">{{ accountTypeLabel(row.accountType) }}</el-tag>
+            <div class="account-name">
+              <div class="account-title">
+                <strong>{{ row.accountName }}</strong>
+                <el-tag v-if="isCurrentAccount(row)" size="small" type="success" effect="plain">
+                  当前
+                </el-tag>
+              </div>
+              <span>{{ accountTypeLabel(row.accountType) }}</span>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="初始资金" width="150" align="right">
-          <template #default="{ row }: { row: SimulationAccount }">
-            <MoneyText :value="row.initialCash" />
-          </template>
-        </el-table-column>
-        <el-table-column label="可用现金" width="150" align="right">
+        <el-table-column label="可用资金" min-width="150" align="right">
           <template #default="{ row }: { row: SimulationAccount }">
             <MoneyText :value="row.availableCash" />
           </template>
         </el-table-column>
-        <el-table-column label="冻结现金" width="150" align="right">
-          <template #default="{ row }: { row: SimulationAccount }">
-            <MoneyText :value="row.frozenCash" />
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="110">
+        <el-table-column label="状态" width="100">
           <template #default="{ row }: { row: SimulationAccount }">
             <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" effect="plain">
               {{ statusLabel(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" min-width="170" show-overflow-tooltip>
-          <template #default="{ row }: { row: SimulationAccount }">
-            {{ formatDateTime(row.createdAt) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="更新时间" min-width="170" show-overflow-tooltip>
-          <template #default="{ row }: { row: SimulationAccount }">
-            {{ formatDateTime(row.updatedAt) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="190" fixed="right">
           <template #default="{ row }: { row: SimulationAccount }">
             <div class="row-actions">
               <el-button
-                v-if="row.status === 'ACTIVE'"
-                link
-                type="warning"
-                :loading="operatingId === row.id"
-                @click="disableAccount(row)"
+                size="small"
+                type="primary"
+                plain
+                :disabled="row.status !== 'ACTIVE' || isCurrentAccount(row)"
+                @click="selectAccount(row)"
               >
-                停用
+                {{ isCurrentAccount(row) ? '正在使用' : '使用账户' }}
               </el-button>
-              <el-button
-                v-else
-                link
-                type="success"
-                :loading="operatingId === row.id"
-                @click="restoreAccount(row)"
+              <el-dropdown
+                trigger="click"
+                :disabled="operatingId === row.id"
+                @command="handleAccountCommand(row, $event)"
               >
-                恢复
-              </el-button>
-              <el-button
-                link
-                type="danger"
-                :loading="operatingId === row.id"
-                @click="removeAccount(row)"
-              >
-                删除
-              </el-button>
+                <el-button link>更多</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="toggle-status">
+                      {{ row.status === 'ACTIVE' ? '停用账户' : '恢复账户' }}
+                    </el-dropdown-item>
+                    <el-dropdown-item command="delete" divided class="danger-menu-item">
+                      删除空账户
+                    </el-dropdown-item>
+                    <el-dropdown-item command="force-delete" class="danger-menu-item">
+                      删除账户及模拟数据
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </template>
         </el-table-column>
@@ -133,9 +148,17 @@
 import { onMounted, reactive, ref } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyText from '@/components/common/MoneyText.vue'
-import { createAccount, deleteAccount, listAccounts, updateAccountStatus } from '@/api/account'
+import {
+  createAccount,
+  deleteAccount,
+  forceDeleteAccount,
+  listAccounts,
+  updateAccountStatus,
+} from '@/api/account'
+import { listPortfolios } from '@/api/portfolio'
 import { usePortfolioStore } from '@/stores/portfolio'
 import type {
   AccountStatus,
@@ -143,15 +166,19 @@ import type {
   CreateSimulationAccountRequest,
   SimulationAccount,
 } from '@/types/account'
+import type { InvestmentPortfolio } from '@/types/portfolio'
 
 const accounts = ref<SimulationAccount[]>([])
+const portfolios = ref<InvestmentPortfolio[]>([])
 const portfolioStore = usePortfolioStore()
 const loading = ref(false)
 const submitting = ref(false)
+const bulkOperating = ref(false)
 const operatingId = ref<number | null>(null)
 const dialogVisible = ref(false)
 const errorMessage = ref('')
 const formRef = ref<FormInstance>()
+const selectedAccounts = ref<SimulationAccount[]>([])
 
 const form = reactive<CreateSimulationAccountRequest>({
   accountName: '',
@@ -189,11 +216,85 @@ async function loadAccounts() {
   errorMessage.value = ''
 
   try {
-    accounts.value = await listAccounts()
+    const [accountRows, portfolioRows] = await Promise.all([listAccounts(), listPortfolios()])
+    accounts.value = accountRows
+    portfolios.value = portfolioRows
+    selectedAccounts.value = selectedAccounts.value.filter((selected) =>
+      accounts.value.some((account) => account.id === selected.id),
+    )
+    reconcileAccountSelection()
   } catch {
     errorMessage.value = '账户加载失败，请确认后端服务是否已启动。'
   } finally {
     loading.value = false
+  }
+}
+
+function handleSelectionChange(rows: SimulationAccount[]) {
+  selectedAccounts.value = rows
+}
+
+function selectAccount(account: SimulationAccount) {
+  if (account.status !== 'ACTIVE') return
+
+  const activePortfolios = portfolios.value.filter(
+    (portfolio) => portfolio.accountId === account.id && portfolio.status === 'ACTIVE',
+  )
+  const currentPortfolio = activePortfolios.find(
+    (portfolio) => portfolio.id === portfolioStore.selectedPortfolioId,
+  )
+  const portfolio = currentPortfolio ?? activePortfolios[0]
+
+  portfolioStore.selectAccount(account.id)
+  portfolioStore.selectPortfolio(portfolio?.id ?? null)
+  if (!portfolio) {
+    ElMessage.warning('该账户暂无可用交易环境')
+  }
+}
+
+function reconcileAccountSelection() {
+  const activeAccounts = accounts.value.filter((account) => account.status === 'ACTIVE')
+  const selectedAccount = activeAccounts.find(
+    (account) => account.id === portfolioStore.selectedAccountId,
+  )
+  const fallbackAccount = activeAccounts.find((account) =>
+    portfolios.value.some(
+      (portfolio) => portfolio.accountId === account.id && portfolio.status === 'ACTIVE',
+    ),
+  )
+  const account = selectedAccount ?? fallbackAccount ?? activeAccounts[0]
+
+  if (!account) {
+    portfolioStore.selectAccount(null)
+    return
+  }
+
+  const activePortfolios = portfolios.value.filter(
+    (portfolio) => portfolio.accountId === account.id && portfolio.status === 'ACTIVE',
+  )
+  const selectedPortfolio = activePortfolios.find(
+    (portfolio) => portfolio.id === portfolioStore.selectedPortfolioId,
+  )
+  const portfolio = selectedPortfolio ?? activePortfolios[0]
+  portfolioStore.selectAccount(account.id)
+  portfolioStore.selectPortfolio(portfolio?.id ?? null)
+}
+
+function isCurrentAccount(account: SimulationAccount) {
+  return portfolioStore.selectedAccountId === account.id
+}
+
+function handleAccountCommand(account: SimulationAccount, command: string | number | object) {
+  if (command === 'toggle-status') {
+    if (account.status === 'ACTIVE') {
+      void disableAccount(account)
+    } else {
+      void restoreAccount(account)
+    }
+  } else if (command === 'delete') {
+    void removeAccount(account)
+  } else if (command === 'force-delete') {
+    void forceRemoveAccount(account)
   }
 }
 
@@ -206,11 +307,13 @@ async function submitCreate() {
   submitting.value = true
 
   try {
-    await createAccount({
+    const account = await createAccount({
       accountName: form.accountName.trim(),
       accountType: form.accountType,
       initialCash: form.initialCash.trim(),
     })
+    portfolioStore.selectAccount(account.id)
+    portfolioStore.selectPortfolio(null)
     ElMessage.success('账户创建成功')
     cancelCreate()
     await loadAccounts()
@@ -220,11 +323,15 @@ async function submitCreate() {
 }
 
 async function disableAccount(account: SimulationAccount) {
-  await ElMessageBox.confirm(
-    `停用后不能再通过该账户创建组合或订单，历史数据仍会保留。\n\n确认停用“${account.accountName}”？`,
-    '停用模拟账户',
-    { confirmButtonText: '停用', cancelButtonText: '取消', type: 'warning' },
-  )
+  try {
+    await ElMessageBox.confirm(
+      `停用后不能再通过该账户创建订单，历史数据仍会保留。\n\n确认停用“${account.accountName}”？`,
+      '停用模拟账户',
+      { confirmButtonText: '停用', cancelButtonText: '取消', type: 'warning' },
+    )
+  } catch {
+    return
+  }
   await operateAccount(account.id, async () => {
     await updateAccountStatus(account.id, 'DISABLED')
     portfolioStore.clearAccountIfSelected(account.id)
@@ -240,21 +347,109 @@ async function restoreAccount(account: SimulationAccount) {
 }
 
 async function removeAccount(account: SimulationAccount) {
-  await ElMessageBox.confirm(
-    `永久删除空账户“${account.accountName}”？\n此操作不可恢复。包含历史业务数据的账户不会被删除。`,
-    '永久删除模拟账户',
-    { confirmButtonText: '永久删除', cancelButtonText: '取消', type: 'error' },
-  )
+  try {
+    await ElMessageBox.confirm(
+      `永久删除空账户“${account.accountName}”？\n此操作不可恢复。只有现金未变动、没有订单、成交、流水和持仓的空账户可以删除。已有交易数据的账户请改为停用。`,
+      '永久删除模拟账户',
+      { confirmButtonText: '永久删除', cancelButtonText: '取消', type: 'error' },
+    )
+  } catch {
+    return
+  }
   await operateAccount(account.id, async () => {
-    try {
-      await deleteAccount(account.id)
+    await deleteAccount(account.id)
+    portfolioStore.clearAccountIfSelected(account.id)
+    ElMessage.success('账户已删除')
+  })
+}
+
+async function forceRemoveAccount(account: SimulationAccount) {
+  try {
+    await ElMessageBox.confirm(
+      `硬删除模拟账户“${account.accountName}”？\n\n该操作会删除该账户下的持仓、订单、成交和资金流水，仅保留证券标的与行情基础数据。此操作不可恢复。`,
+      '硬删除模拟账户',
+      { confirmButtonText: '硬删除', cancelButtonText: '取消', type: 'error' },
+    )
+  } catch {
+    return
+  }
+  await operateAccount(account.id, async () => {
+    await forceDeleteAccount(account.id)
+    portfolioStore.clearAccountIfSelected(account.id)
+    ElMessage.success('账户模拟数据已硬删除')
+  })
+}
+
+async function batchDisableAccounts() {
+  await runBatchAccounts('停用选中的账户？', '停用', async (account) => {
+    if (account.status === 'ACTIVE') {
+      await updateAccountStatus(account.id, 'DISABLED')
       portfolioStore.clearAccountIfSelected(account.id)
-      ElMessage.success('账户已删除')
-    } catch (error) {
-      ElMessage.warning('删除失败，可改为停用。')
-      throw error
     }
   })
+}
+
+async function batchRestoreAccounts() {
+  await runBatchAccounts('恢复选中的账户？', '恢复', async (account) => {
+    if (account.status === 'DISABLED') {
+      await updateAccountStatus(account.id, 'ACTIVE')
+    }
+  })
+}
+
+async function batchRemoveAccounts() {
+  await runBatchAccounts(
+    '批量删除选中的空账户？\n\n只有现金未变动、没有订单、成交、流水和持仓的空账户可以删除。',
+    '删除空账户',
+    async (account) => {
+      await deleteAccount(account.id)
+      portfolioStore.clearAccountIfSelected(account.id)
+    },
+    'error',
+  )
+}
+
+async function batchForceRemoveAccounts() {
+  await runBatchAccounts(
+    '批量硬删除选中的模拟账户？\n\n这会删除账户下的持仓、订单、成交和资金流水，仅保留证券标的与行情基础数据。此操作不可恢复。',
+    '硬删除',
+    async (account) => {
+      await forceDeleteAccount(account.id)
+      portfolioStore.clearAccountIfSelected(account.id)
+    },
+    'error',
+  )
+}
+
+async function runBatchAccounts(
+  message: string,
+  actionLabel: string,
+  action: (account: SimulationAccount) => Promise<void>,
+  type: 'warning' | 'error' = 'warning',
+) {
+  if (selectedAccounts.value.length === 0) return
+  try {
+    await ElMessageBox.confirm(message, `批量${actionLabel}`, {
+      confirmButtonText: actionLabel,
+      cancelButtonText: '取消',
+      type,
+    })
+  } catch {
+    return
+  }
+
+  bulkOperating.value = true
+  let successCount = 0
+  try {
+    for (const account of selectedAccounts.value) {
+      await action(account)
+      successCount += 1
+    }
+    ElMessage.success(`已完成 ${successCount} 个账户`)
+    await loadAccounts()
+  } finally {
+    bulkOperating.value = false
+  }
 }
 
 async function operateAccount(accountId: number, operation: () => Promise<void>) {
@@ -295,30 +490,55 @@ function statusLabel(status: AccountStatus) {
   }
   return labels[status]
 }
-
-function formatDateTime(value: string) {
-  if (!value) return '暂无数据'
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
-}
 </script>
 
 <style scoped>
 .section-body {
+  display: grid;
+  gap: 10px;
   min-width: 0;
-  padding: 16px;
+  padding: 12px;
+}
+
+.account-name span {
+  color: var(--qg-text-muted);
+  font-size: 12px;
+}
+
+.account-name {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.account-name strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.account-title strong {
+  min-width: 0;
+}
+
+.bulk-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.hint {
+  color: var(--qg-text-muted);
+  font-size: 13px;
 }
 
 .full-width {
@@ -330,5 +550,9 @@ function formatDateTime(value: string) {
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.danger-menu-item {
+  color: var(--el-color-danger);
 }
 </style>

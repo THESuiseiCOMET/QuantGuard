@@ -1,158 +1,50 @@
 <template>
   <section class="page">
-    <PageHeader
-      title="模拟订单"
-      description="按当前投资组合读取真实订单，并创建会冻结资金或持仓的模拟限价单。"
-    >
-      <template #actions>
-        <el-space>
-          <el-button :loading="loading" :disabled="!selectedPortfolioId" @click="loadPageData">
-            刷新
-          </el-button>
-          <el-button @click="router.push('/portfolios')">选择组合</el-button>
-        </el-space>
-      </template>
-    </PageHeader>
+    <PageHeader title="模拟订单" />
 
-    <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false" />
+    <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" />
 
-    <el-alert
-      v-if="!selectedPortfolioId"
-      title="请先选择投资组合"
-      description="模拟订单必须绑定到一个当前投资组合。"
-      type="info"
-      show-icon
-      :closable="false"
-    >
-      <template #default>
-        <el-button type="primary" @click="router.push('/portfolios')">前往投资组合</el-button>
-      </template>
-    </el-alert>
-
-    <div class="surface context-panel">
-      <div class="context-item">
-        <span>当前账户</span>
-        <strong>{{ currentAccountName }}</strong>
-      </div>
-      <div class="context-item">
-        <span>当前投资组合</span>
-        <strong>{{ currentPortfolioName }}</strong>
-      </div>
-      <div class="context-item">
-        <span>账户 ID</span>
-        <strong>{{ selectedAccountId ?? '未选择' }}</strong>
-      </div>
-      <div class="context-item">
-        <span>组合 ID</span>
-        <strong>{{ selectedPortfolioId ?? '未选择' }}</strong>
-      </div>
-      <div class="context-item">
-        <span>可用资金</span>
-        <strong><MoneyText :value="currentAccount?.availableCash" /></strong>
-      </div>
-      <div class="context-item">
-        <span>冻结资金</span>
-        <strong><MoneyText :value="currentAccount?.frozenCash" /></strong>
-      </div>
-      <div class="context-item">
-        <span>风险配置状态</span>
-        <el-tag :type="riskConfig ? 'success' : 'info'" effect="plain">
-          {{
-            riskConfig
-              ? accountStatusLabel(riskConfig.status)
-              : hasNoRiskConfig
-                ? '未创建'
-                : '未加载'
-          }}
-        </el-tag>
+    <div v-if="!selectedPortfolioId" class="surface selection-empty">
+      <div>
+        <h2>先选择一个模拟账户</h2>
+        <el-button type="primary" @click="router.push('/accounts')">选择账户</el-button>
       </div>
     </div>
 
     <el-alert
       v-if="selectionMismatch"
-      title="当前账户和投资组合不匹配"
-      description="已禁止提交订单，请回到投资组合页面重新选择。"
+      title="当前交易环境不可用"
+      description="已禁止提交订单，请回到模拟账户页面重新选择。"
       type="warning"
-      show-icon
       :closable="false"
     >
       <template #default>
-        <el-button type="primary" @click="router.push('/portfolios')">重新选择</el-button>
-      </template>
-    </el-alert>
-
-    <div v-if="lastExecutionResult" class="surface execution-result">
-      <div class="panel-heading">
-        <h2>最近模拟成交</h2>
-        <el-button link @click="lastExecutionResult = null">关闭</el-button>
-      </div>
-      <div class="result-grid">
-        <div>
-          <span>订单号</span>
-          <strong>{{ lastExecutionResult.order.orderNo }}</strong>
-        </div>
-        <div>
-          <span>订单状态</span>
-          <strong>{{ orderStatusLabel(lastExecutionResult.order.status) }}</strong>
-        </div>
-        <div>
-          <span>成交编号</span>
-          <strong>{{ lastExecutionResult.trade.tradeNo }}</strong>
-        </div>
-        <div>
-          <span>成交方向</span>
-          <strong>{{ sideLabel(lastExecutionResult.trade.side) }}</strong>
-        </div>
-        <div>
-          <span>成交数量</span>
-          <strong><MoneyText :value="lastExecutionResult.trade.quantity" /></strong>
-        </div>
-        <div>
-          <span>执行价格</span>
-          <strong><MoneyText :value="lastExecutionResult.trade.executionPrice" /></strong>
-        </div>
-        <div>
-          <span>成交金额</span>
-          <strong><MoneyText :value="lastExecutionResult.trade.tradeAmount" /></strong>
-        </div>
-        <div>
-          <span>执行时间</span>
-          <strong>{{ formatDateTime(lastExecutionResult.trade.executedAt) }}</strong>
-        </div>
-      </div>
-      <p>这是本地模拟成交，不是真实交易；执行价格来自订单限价，不代表实时市场撮合价。</p>
-    </div>
-
-    <el-alert
-      v-if="selectedPortfolioId && hasNoRiskConfig && !errorMessage"
-      title="当前组合尚未配置风险规则"
-      description="创建订单前需要先配置 allowBuy、allowSell 和最大单笔订单金额。"
-      type="warning"
-      show-icon
-      :closable="false"
-    >
-      <template #default>
-        <el-button type="primary" @click="router.push('/risk')">前往风险管理</el-button>
+        <el-button type="primary" @click="router.push('/accounts')">重新选择</el-button>
       </template>
     </el-alert>
 
     <div v-if="selectedPortfolioId" class="work-grid">
       <div class="surface order-form-panel">
         <div class="panel-heading">
-          <h2>创建限价订单</h2>
-          <el-tag effect="plain">LIMIT</el-tag>
+          <h2>创建订单</h2>
         </div>
 
         <el-alert
           v-if="activeInstruments.length === 0 && !loading"
-          title="当前没有可用证券标的"
-          description="订单页面只读取 ACTIVE 标的，本轮不提供证券创建表单。"
+          title="当前没有可下单的证券"
+          description="请先在行情中心导入并启用证券。"
           type="info"
-          show-icon
           :closable="false"
         />
 
-        <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="order-form">
+        <el-form
+          ref="formRef"
+          :model="form"
+          :rules="rules"
+          label-position="top"
+          hide-required-asterisk
+          class="order-form"
+        >
           <el-form-item label="证券标的" prop="instrumentId">
             <el-select
               v-model="form.instrumentId"
@@ -170,27 +62,24 @@
             </el-select>
           </el-form-item>
 
-          <div v-if="selectedInstrument" class="instrument-meta">
-            <div>
-              <span>资产类型</span>
-              <strong>{{ assetTypeLabel(selectedInstrument.assetType) }}</strong>
-            </div>
-            <div>
-              <span>币种</span>
-              <strong>{{ selectedInstrument.currency }}</strong>
-            </div>
-            <div>
-              <span>最小交易单位</span>
-              <strong>{{ selectedInstrument.lotSize }}</strong>
-            </div>
-          </div>
-
-          <div v-if="selectedInstrument" class="position-meta">
-            <div class="position-heading">
-              <span>当前标的持仓</span>
-              <strong>{{ selectedPosition ? '真实持仓' : '暂无该标的持仓' }}</strong>
-            </div>
-            <div class="position-grid">
+          <div v-if="selectedInstrument" class="position-snapshot">
+            <div class="snapshot-grid">
+              <div>
+                <span>持仓状态</span>
+                <strong>{{ selectedPosition ? '真实持仓' : '暂无持仓' }}</strong>
+              </div>
+              <div>
+                <span>资产类型</span>
+                <strong>{{ assetTypeLabel(selectedInstrument.assetType) }}</strong>
+              </div>
+              <div>
+                <span>币种</span>
+                <strong>{{ selectedInstrument.currency }}</strong>
+              </div>
+              <div>
+                <span>最小交易单位</span>
+                <strong>{{ selectedInstrument.lotSize }}</strong>
+              </div>
               <div>
                 <span>总数量</span>
                 <strong><MoneyText :value="selectedPosition?.totalQuantity ?? 0" /></strong>
@@ -210,48 +99,40 @@
             </div>
           </div>
 
-          <el-form-item label="买卖方向" prop="side">
+          <el-form-item label="买卖" prop="side">
             <el-radio-group v-model="form.side" class="side-group">
-              <el-radio-button value="BUY">买入 BUY</el-radio-button>
-              <el-radio-button value="SELL">卖出 SELL</el-radio-button>
+              <el-radio-button value="BUY">买入</el-radio-button>
+              <el-radio-button value="SELL">卖出</el-radio-button>
             </el-radio-group>
           </el-form-item>
 
-          <el-form-item label="订单类型">
-            <el-input model-value="限价单 LIMIT" disabled />
-          </el-form-item>
+          <div class="order-input-grid">
+            <el-form-item label="数量" prop="requestedQuantity">
+              <el-input
+                v-model.trim="form.requestedQuantity"
+                inputmode="decimal"
+                placeholder="例如：100"
+              />
+            </el-form-item>
 
-          <el-form-item label="委托数量" prop="requestedQuantity">
-            <el-input
-              v-model.trim="form.requestedQuantity"
-              inputmode="decimal"
-              placeholder="例如：100"
-            />
-            <span class="field-hint">
-              必须大于 0，最多 6 位小数，并且是当前证券 lotSize 的整数倍。
-            </span>
-          </el-form-item>
-
-          <el-form-item label="限价" prop="limitPrice">
-            <el-input
-              v-model.trim="form.limitPrice"
-              inputmode="decimal"
-              placeholder="例如：10.5000"
-            />
-            <span class="field-hint">必须大于 0，最多 4 位小数；不接入实时行情。</span>
-          </el-form-item>
+            <el-form-item label="单价" prop="limitPrice">
+              <el-input
+                v-model.trim="form.limitPrice"
+                inputmode="decimal"
+                placeholder="例如：10.5000"
+              />
+            </el-form-item>
+          </div>
 
           <div class="estimate-box">
-            <span>预估委托金额</span>
+            <span>预估金额</span>
             <strong>{{ estimatedAmountText }}</strong>
-            <small>仅为前端预估，最终以服务端校验结果为准。</small>
           </div>
 
           <el-alert
             v-if="submitBlockReason"
             :title="submitBlockReason"
             type="warning"
-            show-icon
             :closable="false"
           />
 
@@ -263,134 +144,153 @@
               :disabled="Boolean(submitBlockReason)"
               @click="submitOrder"
             >
-              提交限价单
+              提交订单
             </el-button>
           </div>
         </el-form>
       </div>
 
-      <div class="surface risk-panel">
-        <div class="panel-heading">
-          <h2>风险摘要</h2>
-          <el-button link type="primary" @click="router.push('/risk')">管理风险配置</el-button>
-        </div>
+      <div class="side-stack">
+        <div class="surface market-panel">
+          <div class="panel-heading chart-toolbar">
+            <el-radio-group v-model="dailyPriceRange" size="small" @change="loadDailyPrices">
+              <el-radio-button value="1M">1月</el-radio-button>
+              <el-radio-button value="3M">3月</el-radio-button>
+              <el-radio-button value="6M">6月</el-radio-button>
+              <el-radio-button value="1Y">1年</el-radio-button>
+              <el-radio-button value="3Y">3年</el-radio-button>
+              <el-radio-button value="ALL">全部</el-radio-button>
+            </el-radio-group>
+          </div>
 
-        <el-skeleton v-if="loading && !riskConfig" :rows="5" animated />
-        <el-empty v-else-if="hasNoRiskConfig" description="当前组合尚未配置风险规则" />
-        <div v-else-if="riskConfig" class="risk-list">
-          <div>
-            <span>允许买入</span>
-            <el-tag :type="riskConfig.allowBuy ? 'success' : 'danger'" effect="plain">
-              {{ riskConfig.allowBuy ? '允许' : '禁止' }}
-            </el-tag>
+          <div v-if="selectedDailyPrice" class="selected-candle">
+            <div>
+              <span>{{ selectedDailyPrice.tradeDate }} 收盘价</span>
+              <strong><MoneyText :value="selectedDailyPrice.close" /></strong>
+            </div>
+            <el-space>
+              <el-button
+                size="small"
+                type="success"
+                @click="applyDailyPrice(selectedDailyPrice, 'BUY')"
+              >
+                用此价买入
+              </el-button>
+              <el-button
+                size="small"
+                type="warning"
+                @click="applyDailyPrice(selectedDailyPrice, 'SELL')"
+              >
+                用此价卖出
+              </el-button>
+            </el-space>
           </div>
-          <div>
-            <span>允许卖出</span>
-            <el-tag :type="riskConfig.allowSell ? 'success' : 'danger'" effect="plain">
-              {{ riskConfig.allowSell ? '允许' : '禁止' }}
-            </el-tag>
-          </div>
-          <div>
-            <span>最大单笔订单金额</span>
-            <strong><MoneyText :value="riskConfig.maxSingleOrderAmount" /></strong>
-          </div>
-          <div>
-            <span>最大仓位比例</span>
-            <strong>{{ riskConfig.maxPositionRatio }}</strong>
-          </div>
-          <p>最大仓位比例当前仅保存配置，后端暂未执行该规则。</p>
+
+          <el-alert
+            v-if="dailyPriceError"
+            :title="dailyPriceError"
+            type="warning"
+            :closable="false"
+          />
+          <el-empty v-if="!selectedInstrument" description="请选择证券标的后查看 K 线" />
+          <el-empty
+            v-else-if="!dailyPriceLoading && dailyPrices.length === 0"
+            description="当前证券暂无历史日线，请先到证券与行情管理中同步。"
+          />
+          <CandlestickChart
+            v-else
+            v-loading="dailyPriceLoading"
+            :prices="dailyPrices"
+            @candle-click="handleDailyPriceClick"
+          />
         </div>
-        <el-empty v-else description="风险配置尚未加载" />
       </div>
     </div>
 
     <div v-if="selectedPortfolioId" class="surface section-body">
       <div class="table-heading">
-        <h2>订单列表</h2>
-        <span>按当前投资组合读取</span>
+        <h2>订单与成交</h2>
+        <span>{{ orders.length }} 条订单 · {{ trades.length }} 条成交</span>
       </div>
 
       <el-table
         v-loading="loading"
+        class="order-table"
         :data="orders"
         row-key="id"
         empty-text="暂无模拟订单"
-        max-height="calc(100vh - 320px)"
+        max-height="calc(100vh - 280px)"
         table-layout="fixed"
       >
-        <el-table-column prop="orderNo" label="订单号" min-width="230" show-overflow-tooltip />
-        <el-table-column label="证券代码" min-width="140">
+        <el-table-column label="标的" min-width="160">
           <template #default="{ row }: { row: SimulatedOrder }">
-            {{ instrumentText(row.instrumentId, 'symbol') }}
+            <div class="order-security">
+              <strong>{{ instrumentText(row.instrumentId, 'symbol') }}</strong>
+              <span>{{ instrumentText(row.instrumentId, 'name') }}</span>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="证券名称" min-width="180" show-overflow-tooltip>
-          <template #default="{ row }: { row: SimulatedOrder }">
-            {{ instrumentText(row.instrumentId, 'name') }}
-          </template>
-        </el-table-column>
-        <el-table-column label="方向" width="110">
+        <el-table-column label="方向" width="80">
           <template #default="{ row }: { row: SimulatedOrder }">
             <el-tag :type="row.side === 'BUY' ? 'success' : 'warning'" effect="plain">
               {{ sideLabel(row.side) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="类型" width="100">
-          <template #default="{ row }: { row: SimulatedOrder }">
-            {{ orderTypeLabel(row.orderType) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="委托数量" min-width="130" align="right">
+        <el-table-column label="数量" min-width="96" align="right">
           <template #default="{ row }: { row: SimulatedOrder }">
             <MoneyText :value="row.requestedQuantity" />
           </template>
         </el-table-column>
-        <el-table-column label="限价" min-width="120" align="right">
+        <el-table-column label="单价" min-width="96" align="right">
           <template #default="{ row }: { row: SimulatedOrder }">
             <MoneyText :value="row.limitPrice" />
           </template>
         </el-table-column>
-        <el-table-column label="预估委托金额" min-width="150" align="right">
+        <el-table-column label="委托金额" min-width="118" align="right">
           <template #default="{ row }: { row: SimulatedOrder }">
             <MoneyText :value="orderAmount(row)" />
           </template>
         </el-table-column>
-        <el-table-column label="冻结金额" min-width="130" align="right">
+        <el-table-column label="状态" width="96">
           <template #default="{ row }: { row: SimulatedOrder }">
-            <MoneyText :value="row.frozenAmount" />
-          </template>
-        </el-table-column>
-        <el-table-column label="冻结数量" min-width="130" align="right">
-          <template #default="{ row }: { row: SimulatedOrder }">
-            <MoneyText :value="row.frozenQuantity" />
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="120">
-          <template #default="{ row }: { row: SimulatedOrder }">
-            <el-tooltip :content="row.status" placement="top">
+            <el-tooltip
+              :content="row.rejectionReason || orderStatusLabel(row.status)"
+              placement="top"
+            >
               <el-tag :type="orderStatusTag(row.status)" effect="plain">
                 {{ orderStatusLabel(row.status) }}
               </el-tag>
             </el-tooltip>
           </template>
         </el-table-column>
-        <el-table-column label="拒绝原因" min-width="180" show-overflow-tooltip>
+        <el-table-column label="成交结果" min-width="180">
           <template #default="{ row }: { row: SimulatedOrder }">
-            {{ row.rejectionReason || '-' }}
+            <el-tooltip
+              v-if="tradeForOrder(row.id)"
+              :content="`成交编号：${tradeForOrder(row.id)?.tradeNo}`"
+              placement="top"
+            >
+              <div class="trade-summary">
+                <strong>
+                  成交价
+                  <MoneyText :value="tradeForOrder(row.id)?.executionPrice" />
+                </strong>
+                <span>
+                  <MoneyText :value="tradeForOrder(row.id)?.tradeAmount" />
+                  · {{ formatDateTime(tradeForOrder(row.id)?.executedAt ?? '') }}
+                </span>
+              </div>
+            </el-tooltip>
+            <span v-else class="muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="创建时间" min-width="180">
+        <el-table-column label="创建时间" min-width="155">
           <template #default="{ row }: { row: SimulatedOrder }">
             {{ formatDateTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="更新时间" min-width="180">
-          <template #default="{ row }: { row: SimulatedOrder }">
-            {{ formatDateTime(row.updatedAt) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="操作" width="120" fixed="right">
           <template #default="{ row }: { row: SimulatedOrder }">
             <el-space v-if="row.status === 'OPEN'">
               <el-button
@@ -423,31 +323,32 @@
 <script setup lang="ts">
 import { AxiosError } from 'axios'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance, FormRules, TagProps } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyText from '@/components/common/MoneyText.vue'
 import { listAccounts } from '@/api/account'
 import { listInstruments } from '@/api/instrument'
+import { listInstrumentDailyPrices } from '@/api/marketData'
 import { cancelOrder, createOrder, executeOrder, listOrdersByPortfolioId } from '@/api/order'
 import { listPortfolios } from '@/api/portfolio'
 import { listPositionsByPortfolio } from '@/api/position'
-import { getRiskConfigByPortfolioId } from '@/api/risk'
+import { listTradesByPortfolioId } from '@/api/trade'
+import CandlestickChart from '@/views/market-data/components/CandlestickChart.vue'
 import { usePortfolioStore } from '@/stores/portfolio'
-import type { AccountStatus, SimulationAccount } from '@/types/account'
+import type { SimulationAccount } from '@/types/account'
 import type { SecurityInstrument, AssetType } from '@/types/instrument'
+import type { DailyPrice } from '@/types/marketData'
 import type {
   CreateSimulatedOrderRequest,
   OrderSide,
   OrderStatus,
-  OrderType,
   SimulatedOrder,
 } from '@/types/order'
 import type { InvestmentPortfolio } from '@/types/portfolio'
 import type { PortfolioPosition } from '@/types/position'
-import type { PortfolioRiskConfig } from '@/types/risk'
-import type { ExecuteSimulatedOrderResponse } from '@/types/trade'
+import type { SimulatedTrade } from '@/types/trade'
 
 interface OrderForm {
   instrumentId: number | null
@@ -458,24 +359,29 @@ interface OrderForm {
 
 type InstrumentTextField = 'symbol' | 'name'
 type OrderAction = 'execute' | 'cancel'
+type DailyPriceRange = '1M' | '3M' | '6M' | '1Y' | '3Y' | 'ALL'
 
 const router = useRouter()
+const route = useRoute()
 const portfolioStore = usePortfolioStore()
 
 const accounts = ref<SimulationAccount[]>([])
 const portfolios = ref<InvestmentPortfolio[]>([])
 const instruments = ref<SecurityInstrument[]>([])
 const orders = ref<SimulatedOrder[]>([])
+const trades = ref<SimulatedTrade[]>([])
 const positions = ref<PortfolioPosition[]>([])
-const riskConfig = ref<PortfolioRiskConfig | null>(null)
+const dailyPrices = ref<DailyPrice[]>([])
+const selectedDailyPrice = ref<DailyPrice | null>(null)
 const loading = ref(false)
+const dailyPriceLoading = ref(false)
 const submitting = ref(false)
 const errorMessage = ref('')
-const hasNoRiskConfig = ref(false)
+const dailyPriceError = ref('')
 const formRef = ref<FormInstance>()
 const activeActionOrderId = ref<number | null>(null)
 const activeAction = ref<OrderAction | null>(null)
-const lastExecutionResult = ref<ExecuteSimulatedOrderResponse | null>(null)
+const dailyPriceRange = ref<DailyPriceRange>('6M')
 let requestSeq = 0
 
 const form = reactive<OrderForm>({
@@ -502,12 +408,11 @@ const selectedInstrument = computed(() =>
 const selectedPosition = computed(() =>
   positions.value.find((position) => position.instrumentId === form.instrumentId),
 )
+const tradesByOrderId = computed(() => new Map(trades.value.map((trade) => [trade.orderId, trade])))
 const selectionMismatch = computed(() => {
   if (!selectedAccountId.value || !currentPortfolio.value) return false
   return currentPortfolio.value.accountId !== selectedAccountId.value
 })
-const currentPortfolioName = computed(() => currentPortfolio.value?.portfolioName ?? '未选择')
-const currentAccountName = computed(() => currentAccount.value?.accountName ?? '未选择')
 const estimatedAmount = computed(() => multiplyDecimal(form.requestedQuantity, form.limitPrice, 4))
 const estimatedAmountText = computed(() => {
   if (!estimatedAmount.value) return '-'
@@ -515,17 +420,13 @@ const estimatedAmountText = computed(() => {
   return currency ? `${estimatedAmount.value} ${currency}` : estimatedAmount.value
 })
 const submitBlockReason = computed(() => {
-  if (!selectedPortfolioId.value) return '请先选择投资组合'
-  if (!currentPortfolio.value) return '当前选择的投资组合不存在或已不可用'
+  if (!selectedPortfolioId.value) return '请先选择模拟账户'
+  if (!currentPortfolio.value) return '当前账户的交易环境不存在或已不可用'
   if (!selectedAccountId.value || !currentAccount.value) return '当前账户不存在或已不可用'
   if (currentAccount.value.status !== 'ACTIVE') return '当前账户已停用，请重新选择启用账户'
-  if (currentPortfolio.value.status !== 'ACTIVE') return '当前投资组合已停用，请重新选择启用组合'
-  if (selectionMismatch.value) return '当前账户和投资组合不匹配'
-  if (hasNoRiskConfig.value) return '当前组合尚未配置风险规则'
-  if (!riskConfig.value) return '风险配置尚未加载'
+  if (currentPortfolio.value.status !== 'ACTIVE') return '当前账户的交易环境已停用'
+  if (selectionMismatch.value) return '当前交易环境与账户不匹配'
   if (activeInstruments.value.length === 0) return '当前没有可用证券标的'
-  if (form.side === 'BUY' && !riskConfig.value.allowBuy) return '当前风险配置禁止买入'
-  if (form.side === 'SELL' && !riskConfig.value.allowSell) return '当前风险配置禁止卖出'
   return ''
 })
 
@@ -551,6 +452,16 @@ watch(
   () => form.instrumentId,
   () => {
     formRef.value?.clearValidate('requestedQuantity')
+    selectedDailyPrice.value = null
+    void loadDailyPrices()
+  },
+)
+
+watch(
+  () => route.query.instrumentId,
+  () => {
+    const preferredInstrumentId = queryInstrumentId()
+    if (preferredInstrumentId) form.instrumentId = preferredInstrumentId
   },
 )
 
@@ -560,9 +471,8 @@ async function loadPageData() {
   loading.value = true
   errorMessage.value = ''
   orders.value = []
+  trades.value = []
   positions.value = []
-  riskConfig.value = null
-  hasNoRiskConfig.value = false
 
   try {
     const [accountRows, portfolioRows, instrumentRows] = await Promise.all([
@@ -576,10 +486,15 @@ async function loadPageData() {
     instruments.value = instrumentRows
     reconcileSelection()
 
-    const activeSelected = activeInstruments.value.find(
+    const preferredInstrumentId = queryInstrumentId()
+    const activeSelected = activeInstruments.value.some(
       (instrument) => instrument.id === form.instrumentId,
     )
-    if (!activeSelected) form.instrumentId = activeInstruments.value[0]?.id ?? null
+    if (preferredInstrumentId) {
+      form.instrumentId = preferredInstrumentId
+    } else if (!activeSelected) {
+      form.instrumentId = activeInstruments.value[0]?.id ?? null
+    }
 
     const reconciledPortfolioId = selectedPortfolioId.value
     if (!portfolioId || !reconciledPortfolioId) return
@@ -587,9 +502,10 @@ async function loadPageData() {
     if (selectionMismatch.value) return
 
     await Promise.all([
-      loadRiskConfig(reconciledPortfolioId, seq),
       loadOrders(reconciledPortfolioId, seq),
+      loadTrades(reconciledPortfolioId, seq),
       loadPositions(reconciledPortfolioId, seq),
+      loadDailyPrices(),
     ])
   } catch (error) {
     if (seq !== requestSeq) return
@@ -597,6 +513,14 @@ async function loadPageData() {
   } finally {
     if (seq === requestSeq) loading.value = false
   }
+}
+
+function queryInstrumentId() {
+  const raw = route.query.instrumentId
+  const value = Array.isArray(raw) ? raw[0] : raw
+  const id = value ? Number(value) : NaN
+  if (!Number.isInteger(id) || id <= 0) return null
+  return activeInstruments.value.some((instrument) => instrument.id === id) ? id : null
 }
 
 async function loadPositions(portfolioId: number, seq: number) {
@@ -611,25 +535,6 @@ async function loadPositions(portfolioId: number, seq: number) {
   }
 }
 
-async function loadRiskConfig(portfolioId: number, seq: number) {
-  try {
-    const config = await getRiskConfigByPortfolioId(portfolioId)
-    if (seq !== requestSeq) return
-    riskConfig.value = config
-    hasNoRiskConfig.value = false
-  } catch (error) {
-    if (seq !== requestSeq) return
-    if (isMissingRiskConfig(error)) {
-      riskConfig.value = null
-      hasNoRiskConfig.value = true
-      return
-    }
-    riskConfig.value = null
-    hasNoRiskConfig.value = false
-    errorMessage.value = errorToMessage(error, '风险配置加载失败，请稍后重试。')
-  }
-}
-
 async function loadOrders(portfolioId: number, seq: number) {
   try {
     const rows = await listOrdersByPortfolioId(portfolioId)
@@ -640,6 +545,54 @@ async function loadOrders(portfolioId: number, seq: number) {
     orders.value = []
     errorMessage.value = errorToMessage(error, '订单列表加载失败，请稍后重试。')
   }
+}
+
+async function loadTrades(portfolioId: number, seq: number) {
+  try {
+    const rows = await listTradesByPortfolioId(portfolioId)
+    if (seq !== requestSeq) return
+    trades.value = rows
+  } catch (error) {
+    if (seq !== requestSeq) return
+    trades.value = []
+    errorMessage.value = errorToMessage(error, '成交记录加载失败，请稍后重试。')
+  }
+}
+
+async function loadDailyPrices() {
+  const instrumentId = form.instrumentId
+  selectedDailyPrice.value = null
+  dailyPriceError.value = ''
+
+  if (!instrumentId) {
+    dailyPrices.value = []
+    return
+  }
+
+  dailyPriceLoading.value = true
+  try {
+    dailyPrices.value = await listInstrumentDailyPrices(instrumentId, dailyPriceQuery())
+  } catch (error) {
+    dailyPrices.value = []
+    dailyPriceError.value = errorToMessage(
+      error,
+      'K 线加载失败，请确认后端服务和行情数据是否可用。',
+    )
+  } finally {
+    dailyPriceLoading.value = false
+  }
+}
+
+function handleDailyPriceClick(price: DailyPrice) {
+  applyDailyPrice(price, form.side)
+}
+
+function applyDailyPrice(price: DailyPrice, side: OrderSide) {
+  selectedDailyPrice.value = price
+  form.side = side
+  form.limitPrice = formatLimitPrice(price.close)
+  formRef.value?.clearValidate('limitPrice')
+  ElMessage.success(`已带入 ${price.tradeDate} 收盘价`)
 }
 
 async function submitOrder() {
@@ -685,7 +638,7 @@ async function confirmExecute(order: SimulatedOrder) {
   const sideDescription =
     order.side === 'BUY' ? '将消耗已冻结资金并增加持仓。' : '将扣减已冻结持仓并增加账户可用资金。'
   await ElMessageBox.confirm(
-    `确认执行订单 ${order.orderNo}？系统将按该限价立即完成模拟成交，并更新资金、持仓、成交和资金流水。该操作完成后不能取消。${sideDescription}`,
+    `确认执行订单 ${order.orderNo}？系统将按该单价立即完成模拟成交，并更新资金、持仓、成交和资金流水。该操作完成后不能取消。${sideDescription}`,
     '执行模拟订单',
     {
       confirmButtonText: '执行',
@@ -725,7 +678,6 @@ async function operateOrder(order: SimulatedOrder, action: OrderAction) {
   try {
     if (action === 'execute') {
       const result = await executeOrder(order.id)
-      lastExecutionResult.value = result
       ElMessage.success(`订单已执行：${result.trade.tradeNo}`)
     } else {
       const canceled = await cancelOrder(order.id)
@@ -753,6 +705,7 @@ async function refreshAfterOrderAction(portfolioId: number) {
   const seq = ++requestSeq
   await Promise.all([
     loadOrders(portfolioId, seq),
+    loadTrades(portfolioId, seq),
     loadAccountsAndPositionsAfterAction(portfolioId, seq),
   ])
 }
@@ -773,6 +726,36 @@ function resetOrderForm() {
   formRef.value?.clearValidate()
 }
 
+function dailyPriceQuery() {
+  const to = new Date()
+  const from = new Date(to)
+  const limitByRange: Record<DailyPriceRange, number> = {
+    '1M': 80,
+    '3M': 160,
+    '6M': 260,
+    '1Y': 520,
+    '3Y': 1000,
+    ALL: 10000,
+  }
+
+  if (dailyPriceRange.value === '1M') from.setMonth(from.getMonth() - 1)
+  if (dailyPriceRange.value === '3M') from.setMonth(from.getMonth() - 3)
+  if (dailyPriceRange.value === '6M') from.setMonth(from.getMonth() - 6)
+  if (dailyPriceRange.value === '1Y') from.setFullYear(from.getFullYear() - 1)
+  if (dailyPriceRange.value === '3Y') from.setFullYear(from.getFullYear() - 3)
+  if (dailyPriceRange.value === 'ALL') from.setFullYear(from.getFullYear() - 30)
+
+  return {
+    from: toDateString(from),
+    to: toDateString(to),
+    limit: limitByRange[dailyPriceRange.value],
+  }
+}
+
+function toDateString(value: Date) {
+  return value.toISOString().slice(0, 10)
+}
+
 function reconcileSelection() {
   const selectedAccountExists =
     portfolioStore.selectedAccountId === null ||
@@ -789,21 +772,24 @@ function reconcileSelection() {
   )
 
   if (!selectedPortfolio || selectedPortfolio.status !== 'ACTIVE') {
-    portfolioStore.selectPortfolio(null)
+    const availablePortfolios = portfolios.value.filter((portfolio) => {
+      if (portfolio.status !== 'ACTIVE') return false
+      return accounts.value.some(
+        (account) => account.id === portfolio.accountId && account.status === 'ACTIVE',
+      )
+    })
+    if (availablePortfolios.length === 1) {
+      portfolioStore.selectAccount(availablePortfolios[0].accountId)
+      portfolioStore.selectPortfolio(availablePortfolios[0].id)
+    } else {
+      portfolioStore.selectPortfolio(null)
+    }
     return
   }
 
   if (portfolioStore.selectedAccountId !== selectedPortfolio.accountId) {
     portfolioStore.selectAccount(selectedPortfolio.accountId)
   }
-}
-
-function isMissingRiskConfig(error: unknown) {
-  if (!(error instanceof AxiosError)) return false
-  return (
-    error.response?.status === 404 &&
-    error.response.data?.message === 'Portfolio risk config not found'
-  )
 }
 
 function errorToMessage(error: unknown, fallback: string) {
@@ -832,11 +818,11 @@ function validateQuantity(_: unknown, value: string, callback: (error?: Error) =
 
 function validateLimitPrice(_: unknown, value: string, callback: (error?: Error) => void) {
   if (!/^\d{1,15}(\.\d{1,4})?$/.test(value)) {
-    callback(new Error('限价必须大于 0，最多 15 位整数和 4 位小数'))
+    callback(new Error('单价必须大于 0，最多 15 位整数和 4 位小数'))
     return
   }
   if (Number(value) <= 0) {
-    callback(new Error('限价必须大于 0'))
+    callback(new Error('单价必须大于 0'))
     return
   }
   callback()
@@ -871,6 +857,11 @@ function multiplyDecimal(left: string | number, right: string | number, scale: n
   return result.toFixed(scale)
 }
 
+function formatLimitPrice(value: string | number) {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? numericValue.toFixed(4) : String(value)
+}
+
 function instrumentOptionLabel(instrument: SecurityInstrument) {
   return `${instrument.symbol} · ${instrument.instrumentName} · ${instrument.exchange}`
 }
@@ -885,19 +876,16 @@ function orderAmount(order: SimulatedOrder) {
   return multiplyDecimal(order.requestedQuantity, order.limitPrice, 4)
 }
 
+function tradeForOrder(orderId: number) {
+  return tradesByOrderId.value.get(orderId)
+}
+
 function sideLabel(side: OrderSide) {
   const labels: Record<OrderSide, string> = {
     BUY: '买入',
     SELL: '卖出',
   }
   return labels[side]
-}
-
-function orderTypeLabel(type: OrderType) {
-  const labels: Record<OrderType, string> = {
-    LIMIT: '限价',
-  }
-  return labels[type]
 }
 
 function orderStatusLabel(status: OrderStatus) {
@@ -936,14 +924,6 @@ function assetTypeLabel(type: AssetType) {
   return labels[type]
 }
 
-function accountStatusLabel(status: AccountStatus) {
-  const labels: Record<AccountStatus, string> = {
-    ACTIVE: '启用',
-    DISABLED: '停用',
-  }
-  return labels[status]
-}
-
 function formatDateTime(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -960,55 +940,69 @@ function formatDateTime(value: string) {
 </script>
 
 <style scoped>
-.context-panel {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
-
-.context-item {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  padding: 16px;
-  border-right: 1px solid var(--qg-border);
-}
-
-.context-item:last-child {
-  border-right: 0;
-}
-
-.context-item span,
-.field-hint,
 .estimate-box span,
-.estimate-box small,
-.instrument-meta span,
-.position-meta span,
-.risk-list span,
-.execution-result span,
-.execution-result p,
-.risk-list p,
+.position-snapshot span,
 .table-heading span {
   color: var(--qg-text-muted);
   font-size: 13px;
 }
 
-.context-item strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.selection-empty {
+  display: grid;
+  min-height: 230px;
+  place-items: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.selection-empty div {
+  max-width: 460px;
+}
+
+.selection-empty h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.selection-empty p {
+  margin: 10px 0 20px;
+  color: var(--qg-text-muted);
+  line-height: 1.7;
 }
 
 .work-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  grid-template-columns: minmax(380px, 0.9fr) minmax(420px, 1.1fr);
   gap: 16px;
+  align-items: stretch;
 }
 
 .order-form-panel,
-.risk-panel,
+.market-panel,
 .section-body {
   min-width: 0;
+}
+
+.order-form-panel,
+.market-panel {
+  height: 100%;
+  padding: 14px;
+}
+
+.section-body {
   padding: 16px;
+}
+
+.side-stack {
+  display: grid;
+  gap: 16px;
+  height: 100%;
+  min-width: 0;
+}
+
+.market-panel {
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-heading,
@@ -1028,77 +1022,89 @@ function formatDateTime(value: string) {
   font-size: 18px;
 }
 
+.panel-heading {
+  margin-bottom: 12px;
+}
+
+.chart-toolbar {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.chart-toolbar :deep(.el-radio-group) {
+  flex-wrap: nowrap;
+}
+
 .order-form {
   display: grid;
   gap: 2px;
+}
+
+.order-form :deep(.el-form-item) {
+  margin-bottom: 12px;
+}
+
+.order-input-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .full-width {
   width: 100%;
 }
 
-.instrument-meta,
-.position-meta,
-.execution-result {
+.position-snapshot {
   display: grid;
   gap: 10px;
   margin-bottom: 16px;
   padding: 12px;
   border: 1px solid var(--qg-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--qg-subtle);
 }
 
-.instrument-meta {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.instrument-meta div,
-.risk-list div,
-.position-grid div,
-.result-grid div {
+.snapshot-grid div {
   display: grid;
-  gap: 4px;
+  gap: 2px;
+  min-width: 0;
 }
 
-.position-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.position-grid,
-.result-grid {
+.snapshot-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px 10px;
 }
 
-.execution-result {
-  background: #ffffff;
+.position-snapshot {
+  gap: 0;
+  margin-bottom: 12px;
+  padding: 10px;
 }
 
-.execution-result p {
-  margin: 0;
+.position-snapshot span {
+  font-size: 11px;
+}
+
+.position-snapshot strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .side-group {
   width: 100%;
 }
 
-.field-hint {
-  display: block;
-  margin-top: 8px;
-}
-
 .estimate-box {
   display: grid;
   gap: 4px;
-  margin: 4px 0 14px;
-  padding: 12px;
+  margin: 0 0 12px;
+  padding: 10px;
   border: 1px solid var(--qg-border);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--qg-subtle);
 }
 
 .estimate-box strong {
@@ -1111,40 +1117,118 @@ function formatDateTime(value: string) {
   gap: 12px;
 }
 
-.risk-list {
+.market-panel {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
-.risk-list div {
-  grid-template-columns: 1fr auto;
+.selected-candle {
+  display: flex;
+  gap: 12px;
   align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--qg-border);
+  border-radius: 8px;
+  background: var(--qg-subtle);
 }
 
-.risk-list p {
-  margin: 0;
+.selected-candle div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.selected-candle span {
+  color: var(--qg-text-muted);
+  font-size: 13px;
+}
+
+.market-panel :deep(.chart) {
+  height: 420px;
+  min-height: 320px;
 }
 
 .muted {
   color: var(--qg-text-muted);
 }
 
-@media (max-width: 1100px) {
-  .context-panel,
-  .work-grid,
-  .instrument-meta,
-  .position-grid,
-  .result-grid {
+.order-security {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.order-security strong,
+.order-security span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-security span {
+  color: var(--qg-text-muted);
+  font-size: 12px;
+}
+
+.trade-summary {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.trade-summary strong {
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.trade-summary span {
+  overflow: hidden;
+  color: var(--qg-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-table :deep(.cell) {
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.order-table :deep(.el-table__cell) {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+@media (max-width: 1180px) {
+  .work-grid {
     grid-template-columns: 1fr;
   }
 
-  .context-item {
-    border-right: 0;
-    border-bottom: 1px solid var(--qg-border);
+  .order-form-panel,
+  .market-panel {
+    height: auto;
+  }
+}
+
+@media (max-width: 680px) {
+  .selected-candle {
+    grid-template-columns: 1fr;
   }
 
-  .context-item:last-child {
-    border-bottom: 0;
+  .snapshot-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .order-input-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .selected-candle {
+    display: grid;
+    align-items: stretch;
   }
 }
 </style>

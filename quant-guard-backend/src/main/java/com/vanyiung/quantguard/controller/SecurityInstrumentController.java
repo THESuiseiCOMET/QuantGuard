@@ -75,6 +75,12 @@ public class SecurityInstrumentController {
         return ApiResponse.success(null);
     }
 
+    @DeleteMapping("/{id}/force")
+    public ApiResponse<Void> forceDelete(@PathVariable @Positive(message = "id must be positive") Long id) {
+        securityInstrumentService.forceDelete(id);
+        return ApiResponse.success(null);
+    }
+
     @PostMapping("/import/preview")
     public ApiResponse<List<InstrumentImportPreviewItem>> previewImport(
             @Valid @RequestBody InstrumentImportPreviewRequest request) {

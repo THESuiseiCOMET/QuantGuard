@@ -5,7 +5,6 @@ import com.vanyiung.quantguard.dto.SimulatedOrderResponse;
 import com.vanyiung.quantguard.entity.CashLedger;
 import com.vanyiung.quantguard.entity.InvestmentPortfolio;
 import com.vanyiung.quantguard.entity.PortfolioPosition;
-import com.vanyiung.quantguard.entity.PortfolioRiskConfig;
 import com.vanyiung.quantguard.entity.SecurityInstrument;
 import com.vanyiung.quantguard.entity.SimulatedOrder;
 import com.vanyiung.quantguard.entity.SimulationAccount;
@@ -18,12 +17,10 @@ import com.vanyiung.quantguard.enums.InstrumentStatus;
 import com.vanyiung.quantguard.enums.OrderSide;
 import com.vanyiung.quantguard.enums.OrderStatus;
 import com.vanyiung.quantguard.enums.OrderType;
-import com.vanyiung.quantguard.enums.RiskConfigStatus;
 import com.vanyiung.quantguard.exception.BusinessRuleException;
 import com.vanyiung.quantguard.mapper.CashLedgerMapper;
 import com.vanyiung.quantguard.mapper.InvestmentPortfolioMapper;
 import com.vanyiung.quantguard.mapper.PortfolioPositionMapper;
-import com.vanyiung.quantguard.mapper.PortfolioRiskConfigMapper;
 import com.vanyiung.quantguard.mapper.SecurityInstrumentMapper;
 import com.vanyiung.quantguard.mapper.SimulatedOrderMapper;
 import com.vanyiung.quantguard.mapper.SimulationAccountMapper;
@@ -63,9 +60,6 @@ class SimulatedOrderServiceImplTest {
     private SecurityInstrumentMapper securityInstrumentMapper;
 
     @Mock
-    private PortfolioRiskConfigMapper portfolioRiskConfigMapper;
-
-    @Mock
     private PortfolioPositionMapper portfolioPositionMapper;
 
     @Mock
@@ -80,14 +74,13 @@ class SimulatedOrderServiceImplTest {
                 simulationAccountMapper,
                 investmentPortfolioMapper,
                 securityInstrumentMapper,
-                portfolioRiskConfigMapper,
                 portfolioPositionMapper,
                 cashLedgerMapper);
     }
 
     @Test
     void buyOrderSucceedsAndFreezesCash() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
         when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
         when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenAnswer(invocation -> {
             SimulatedOrder order = invocation.getArgument(0);
@@ -117,7 +110,7 @@ class SimulatedOrderServiceImplTest {
 
     @Test
     void buyOrderRejectsTinyAmountThatWouldRoundToZero() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("0.000001")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("0.000001")));
 
         assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
                 1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("0.000001"), new BigDecimal("0.0001"))));
@@ -128,7 +121,7 @@ class SimulatedOrderServiceImplTest {
 
     @Test
     void buyOrderAllowsMinimumAmount() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("1.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("1.000000")));
         when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
         when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenAnswer(invocation -> {
             SimulatedOrder order = invocation.getArgument(0);
@@ -145,7 +138,7 @@ class SimulatedOrderServiceImplTest {
 
     @Test
     void buyOrderFreezesUsingUnifiedFourDecimalAmount() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("0.000001")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("0.000001")));
         when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
         when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenAnswer(invocation -> {
             SimulatedOrder order = invocation.getArgument(0);
@@ -162,7 +155,7 @@ class SimulatedOrderServiceImplTest {
 
     @Test
     void buyOrderRejectsInsufficientCashWithoutCreatingOrder() {
-        stubCommonBuySellState(account(new BigDecimal("100.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
 
         assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
                 1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));
@@ -173,7 +166,7 @@ class SimulatedOrderServiceImplTest {
 
     @Test
     void sellOrderSucceedsAndFreezesPositionQuantity() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
         when(portfolioPositionMapper.selectOne(any())).thenReturn(position(new BigDecimal("500.000000")));
         when(portfolioPositionMapper.updateById(any(PortfolioPosition.class))).thenReturn(1);
         when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenAnswer(invocation -> {
@@ -197,7 +190,7 @@ class SimulatedOrderServiceImplTest {
 
     @Test
     void buyOrderRejectsWhenOrderInsertFailsAfterCashFreeze() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
         when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
         when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenReturn(0);
 
@@ -207,7 +200,7 @@ class SimulatedOrderServiceImplTest {
 
     @Test
     void buyOrderRejectsWhenFreezeLedgerInsertFails() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
         when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
         when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenAnswer(invocation -> {
             SimulatedOrder order = invocation.getArgument(0);
@@ -222,7 +215,7 @@ class SimulatedOrderServiceImplTest {
 
     @Test
     void buyOrderDuplicateFreezeLedgerIsConvertedToBusinessException() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
         when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
         when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenAnswer(invocation -> {
             SimulatedOrder order = invocation.getArgument(0);
@@ -237,7 +230,7 @@ class SimulatedOrderServiceImplTest {
 
     @Test
     void sellOrderRejectsWhenOrderInsertFailsAfterPositionFreeze() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
         when(portfolioPositionMapper.selectOne(any())).thenReturn(position(new BigDecimal("500.000000")));
         when(portfolioPositionMapper.updateById(any(PortfolioPosition.class))).thenReturn(1);
         when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenReturn(0);
@@ -248,7 +241,7 @@ class SimulatedOrderServiceImplTest {
 
     @Test
     void sellOrderRejectsInsufficientPositionWithoutCreatingOrder() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
         when(portfolioPositionMapper.selectOne(any())).thenReturn(position(new BigDecimal("100.000000")));
 
         assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
@@ -265,25 +258,33 @@ class SimulatedOrderServiceImplTest {
         assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
                 1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));
 
-        verifyNoInteractions(securityInstrumentMapper);
-        verifyNoInteractions(portfolioRiskConfigMapper);
-        verifyNoInteractions(portfolioPositionMapper);
+        verifyNoInteractions(securityInstrumentMapper);        verifyNoInteractions(portfolioPositionMapper);
         verify(simulatedOrderMapper, never()).insert(any(SimulatedOrder.class));
         verify(simulationAccountMapper, never()).updateById(any(SimulationAccount.class));
     }
 
     @Test
-    void orderRejectsAmountAboveRiskLimit() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")),
-                riskConfig(new BigDecimal("1000.0000"), true, true));
+    void buyOrderDoesNotRequireRiskConfig() {
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
+        when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(1);
+        when(simulatedOrderMapper.insert(any(SimulatedOrder.class))).thenAnswer(invocation -> {
+            SimulatedOrder order = invocation.getArgument(0);
+            order.setId(100L);
+            return 1;
+        });
+        when(cashLedgerMapper.insert(any(CashLedger.class))).thenReturn(1);
 
-        assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
-                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));
+        SimulatedOrderResponse response = simulatedOrderService.create(new CreateSimulatedOrderRequest(
+                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000")));
+
+        assertEquals(OrderStatus.OPEN, response.status());
+        verify(simulatedOrderMapper).insert(any(SimulatedOrder.class));
+        verify(cashLedgerMapper).insert(any(CashLedger.class));
     }
 
     @Test
     void orderRejectsQuantityThatDoesNotMatchLotSize() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
 
         assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
                 1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("150.000000"), new BigDecimal("10.0000"))));
@@ -319,10 +320,7 @@ class SimulatedOrderServiceImplTest {
         when(securityInstrumentMapper.selectById(1L)).thenReturn(null);
 
         assertThrows(com.vanyiung.quantguard.exception.ResourceNotFoundException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
-                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));
-
-        verifyNoInteractions(portfolioRiskConfigMapper);
-        verify(simulatedOrderMapper, never()).insert(any(SimulatedOrder.class));
+                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));        verify(simulatedOrderMapper, never()).insert(any(SimulatedOrder.class));
     }
 
     @Test
@@ -375,39 +373,12 @@ class SimulatedOrderServiceImplTest {
         when(securityInstrumentMapper.selectById(1L)).thenReturn(instrument);
 
         assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
-                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));
-
-        verifyNoInteractions(portfolioRiskConfigMapper);
-        verify(simulatedOrderMapper, never()).insert(any(SimulatedOrder.class));
-    }
-
-    @Test
-    void buyOrderRejectsWhenBuyIsDisabled() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")),
-                riskConfig(new BigDecimal("50000.0000"), false, true));
-
-        assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
-                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));
-
-        verify(simulationAccountMapper, never()).updateById(any(SimulationAccount.class));
-        verify(simulatedOrderMapper, never()).insert(any(SimulatedOrder.class));
-    }
-
-    @Test
-    void sellOrderRejectsWhenSellIsDisabled() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")),
-                riskConfig(new BigDecimal("50000.0000"), true, false));
-
-        assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
-                1L, 1L, 1L, OrderSide.SELL, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));
-
-        verifyNoInteractions(portfolioPositionMapper);
-        verify(simulatedOrderMapper, never()).insert(any(SimulatedOrder.class));
+                1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT, new BigDecimal("200.000000"), new BigDecimal("10.0000"))));        verify(simulatedOrderMapper, never()).insert(any(SimulatedOrder.class));
     }
 
     @Test
     void sellOrderRejectsMissingPositionWithoutCreatingOrder() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
         when(portfolioPositionMapper.selectOne(any())).thenReturn(null);
 
         assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
@@ -419,7 +390,7 @@ class SimulatedOrderServiceImplTest {
 
     @Test
     void buyOrderRejectsWhenOptimisticLockUpdateFails() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
         when(simulationAccountMapper.updateById(any(SimulationAccount.class))).thenReturn(0);
 
         assertThrows(BusinessRuleException.class, () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
@@ -430,7 +401,7 @@ class SimulatedOrderServiceImplTest {
 
     @Test
     void sellOrderRejectsWhenOptimisticLockUpdateFails() {
-        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")), riskConfig());
+        stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
         when(portfolioPositionMapper.selectOne(any())).thenReturn(position(new BigDecimal("500.000000")));
         when(portfolioPositionMapper.updateById(any(PortfolioPosition.class))).thenReturn(0);
 
@@ -457,12 +428,10 @@ class SimulatedOrderServiceImplTest {
 
     private void stubCommonBuySellState(SimulationAccount account,
                                         InvestmentPortfolio portfolio,
-                                        SecurityInstrument instrument,
-                                        PortfolioRiskConfig riskConfig) {
+                                        SecurityInstrument instrument) {
         when(simulationAccountMapper.selectById(1L)).thenReturn(account);
         when(investmentPortfolioMapper.selectById(1L)).thenReturn(portfolio);
         when(securityInstrumentMapper.selectById(1L)).thenReturn(instrument);
-        when(portfolioRiskConfigMapper.selectOne(any())).thenReturn(riskConfig);
     }
 
     private SimulationAccount account(BigDecimal availableCash) {
@@ -494,22 +463,6 @@ class SimulatedOrderServiceImplTest {
         instrument.setStatus(InstrumentStatus.ACTIVE);
         return instrument;
     }
-
-    private PortfolioRiskConfig riskConfig() {
-        return riskConfig(new BigDecimal("50000.0000"), true, true);
-    }
-
-    private PortfolioRiskConfig riskConfig(BigDecimal maxSingleOrderAmount, boolean allowBuy, boolean allowSell) {
-        PortfolioRiskConfig riskConfig = new PortfolioRiskConfig();
-        riskConfig.setPortfolioId(1L);
-        riskConfig.setMaxSingleOrderAmount(maxSingleOrderAmount);
-        riskConfig.setMaxPositionRatio(new BigDecimal("0.500000"));
-        riskConfig.setAllowBuy(allowBuy);
-        riskConfig.setAllowSell(allowSell);
-        riskConfig.setStatus(RiskConfigStatus.ACTIVE);
-        return riskConfig;
-    }
-
     private PortfolioPosition position(BigDecimal availableQuantity) {
         PortfolioPosition position = new PortfolioPosition();
         position.setId(1L);

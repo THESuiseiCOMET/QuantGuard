@@ -183,6 +183,33 @@ class SecurityInstrumentServiceImplTest {
     }
 
     @Test
+    void forceDeleteInstrumentRemovesRelatedSimulationData() {
+        when(securityInstrumentMapper.selectById(1L)).thenReturn(activeInstrument());
+        when(syncLogMapper.exists(any())).thenReturn(false);
+        when(securityInstrumentMapper.deleteById(1L)).thenReturn(1);
+
+        securityInstrumentService.forceDelete(1L);
+
+        verify(cashLedgerMapper).delete(any());
+        verify(simulatedTradeMapper).delete(any());
+        verify(simulatedOrderMapper).delete(any());
+        verify(portfolioPositionMapper).delete(any());
+        verify(dailyPriceMapper).delete(any());
+        verify(syncLogMapper).delete(any());
+        verify(securityInstrumentMapper).deleteById(1L);
+    }
+
+    @Test
+    void forceDeleteInstrumentWithRunningSyncFails() {
+        when(securityInstrumentMapper.selectById(1L)).thenReturn(activeInstrument());
+        when(syncLogMapper.exists(any())).thenReturn(true);
+
+        assertThrows(BusinessRuleException.class, () -> securityInstrumentService.forceDelete(1L));
+
+        verify(securityInstrumentMapper, never()).deleteById(1L);
+    }
+
+    @Test
     void disableUnusedInstrumentSucceeds() {
         SecurityInstrument instrument = activeInstrument();
         when(securityInstrumentMapper.selectById(1L)).thenReturn(instrument);

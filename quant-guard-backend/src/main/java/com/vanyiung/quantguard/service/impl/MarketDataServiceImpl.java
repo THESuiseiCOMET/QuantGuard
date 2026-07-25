@@ -214,6 +214,12 @@ public class MarketDataServiceImpl implements MarketDataService {
             }
             List<ProviderDailyBar> bars = marketDataProvider.fetchDailyBars(
                     List.of(new MarketSymbol(instrument.getSymbol(), instrument.getExchange())), startDate, endDate);
+            if (bars.isEmpty()) {
+                String message = "No daily price rows returned. ETF symbols such as 588000.SH require Tushare fund_daily permission.";
+                finishLog(log, MarketDataSyncStatus.FAILED, 0, 0, 0, message);
+                return new DailyPriceSyncResult(instrumentId, canonicalCode(instrument), "FAILED",
+                        0, 0, 0, latestTradeDate(instrumentId), message);
+            }
             int inserted = 0;
             int updated = 0;
             for (ProviderDailyBar bar : bars) {

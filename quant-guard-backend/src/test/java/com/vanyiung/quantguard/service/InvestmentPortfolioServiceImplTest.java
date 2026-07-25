@@ -12,7 +12,6 @@ import com.vanyiung.quantguard.exception.ResourceNotFoundException;
 import com.vanyiung.quantguard.mapper.CashLedgerMapper;
 import com.vanyiung.quantguard.mapper.InvestmentPortfolioMapper;
 import com.vanyiung.quantguard.mapper.PortfolioPositionMapper;
-import com.vanyiung.quantguard.mapper.PortfolioRiskConfigMapper;
 import com.vanyiung.quantguard.mapper.SimulatedOrderMapper;
 import com.vanyiung.quantguard.mapper.SimulatedTradeMapper;
 import com.vanyiung.quantguard.mapper.SimulationAccountMapper;
@@ -23,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,9 +44,6 @@ class InvestmentPortfolioServiceImplTest {
     private PortfolioPositionMapper portfolioPositionMapper;
 
     @Mock
-    private PortfolioRiskConfigMapper portfolioRiskConfigMapper;
-
-    @Mock
     private SimulatedOrderMapper simulatedOrderMapper;
 
     @Mock
@@ -55,12 +52,15 @@ class InvestmentPortfolioServiceImplTest {
     @Mock
     private CashLedgerMapper cashLedgerMapper;
 
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+
     private InvestmentPortfolioServiceImpl investmentPortfolioService;
 
     @BeforeEach
     void setUp() {
         investmentPortfolioService = new InvestmentPortfolioServiceImpl(investmentPortfolioMapper, simulationAccountMapper,
-                portfolioPositionMapper, portfolioRiskConfigMapper, simulatedOrderMapper, simulatedTradeMapper, cashLedgerMapper);
+                portfolioPositionMapper, simulatedOrderMapper, simulatedTradeMapper, cashLedgerMapper, jdbcTemplate);
     }
 
     @Test
@@ -148,7 +148,6 @@ class InvestmentPortfolioServiceImplTest {
     void emptyPortfolioCanBeDeleted() {
         when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
         when(portfolioPositionMapper.exists(any())).thenReturn(false);
-        when(portfolioRiskConfigMapper.exists(any())).thenReturn(false);
         when(simulatedOrderMapper.exists(any())).thenReturn(false);
         when(simulatedTradeMapper.exists(any())).thenReturn(false);
         when(cashLedgerMapper.exists(any())).thenReturn(false);
@@ -160,14 +159,18 @@ class InvestmentPortfolioServiceImplTest {
     }
 
     @Test
-    void portfolioWithRiskConfigCannotBeDeleted() {
+    void portfolioWithOnlyLegacyRiskConfigCanBeDeleted() {
         when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
         when(portfolioPositionMapper.exists(any())).thenReturn(false);
-        when(portfolioRiskConfigMapper.exists(any())).thenReturn(true);
+        when(simulatedOrderMapper.exists(any())).thenReturn(false);
+        when(simulatedTradeMapper.exists(any())).thenReturn(false);
+        when(cashLedgerMapper.exists(any())).thenReturn(false);
+        when(investmentPortfolioMapper.deleteById(10L)).thenReturn(1);
 
-        assertThrows(BusinessRuleException.class, () -> investmentPortfolioService.delete(10L));
+        investmentPortfolioService.delete(10L);
 
-        verify(investmentPortfolioMapper, never()).deleteById(10L);
+        verify(jdbcTemplate).update("DELETE FROM portfolio_risk_config WHERE portfolio_id = ?", 10L);
+        verify(investmentPortfolioMapper).deleteById(10L);
     }
 
     @Test
@@ -184,7 +187,6 @@ class InvestmentPortfolioServiceImplTest {
     void portfolioWithOrderCannotBeDeleted() {
         when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
         when(portfolioPositionMapper.exists(any())).thenReturn(false);
-        when(portfolioRiskConfigMapper.exists(any())).thenReturn(false);
         when(simulatedOrderMapper.exists(any())).thenReturn(true);
 
         assertThrows(BusinessRuleException.class, () -> investmentPortfolioService.delete(10L));
@@ -196,7 +198,6 @@ class InvestmentPortfolioServiceImplTest {
     void portfolioWithTradeCannotBeDeleted() {
         when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
         when(portfolioPositionMapper.exists(any())).thenReturn(false);
-        when(portfolioRiskConfigMapper.exists(any())).thenReturn(false);
         when(simulatedOrderMapper.exists(any())).thenReturn(false);
         when(simulatedTradeMapper.exists(any())).thenReturn(true);
 
@@ -209,7 +210,6 @@ class InvestmentPortfolioServiceImplTest {
     void portfolioWithCashLedgerCannotBeDeleted() {
         when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
         when(portfolioPositionMapper.exists(any())).thenReturn(false);
-        when(portfolioRiskConfigMapper.exists(any())).thenReturn(false);
         when(simulatedOrderMapper.exists(any())).thenReturn(false);
         when(simulatedTradeMapper.exists(any())).thenReturn(false);
         when(cashLedgerMapper.exists(any())).thenReturn(true);
@@ -217,6 +217,30 @@ class InvestmentPortfolioServiceImplTest {
         assertThrows(BusinessRuleException.class, () -> investmentPortfolioService.delete(10L));
 
         verify(investmentPortfolioMapper, never()).deleteById(10L);
+    }
+
+    @Test
+    void forceDeleteRemovesPortfolioSimulationData() {
+        when(investmentPortfolioMapper.selectById(10L)).thenReturn(portfolio());
+        when(investmentPortfolioMapper.deleteById(10L)).thenReturn(1);
+
+        investmentPortfolioService.forceDelete(10L);
+
+        verify(cashLedgerMapper).delete(any());
+        verify(simulatedTradeMapper).delete(any());
+        verify(simulatedOrderMapper).delete(any());
+        verify(portfolioPositionMapper).delete(any());
+        verify(jdbcTemplate).update("DELETE FROM portfolio_risk_config WHERE portfolio_id = ?", 10L);
+        verify(investmentPortfolioMapper).deleteById(10L);
+    }
+
+    @Test
+    void forceDeleteRejectsMissingPortfolio() {
+        when(investmentPortfolioMapper.selectById(999L)).thenReturn(null);
+
+        assertThrows(ResourceNotFoundException.class, () -> investmentPortfolioService.forceDelete(999L));
+
+        verify(investmentPortfolioMapper, never()).deleteById(999L);
     }
 
     @Test

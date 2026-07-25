@@ -6,7 +6,6 @@ import com.vanyiung.quantguard.dto.SimulatedOrderResponse;
 import com.vanyiung.quantguard.entity.CashLedger;
 import com.vanyiung.quantguard.entity.InvestmentPortfolio;
 import com.vanyiung.quantguard.entity.PortfolioPosition;
-import com.vanyiung.quantguard.entity.PortfolioRiskConfig;
 import com.vanyiung.quantguard.entity.SecurityInstrument;
 import com.vanyiung.quantguard.entity.SimulatedOrder;
 import com.vanyiung.quantguard.entity.SimulationAccount;
@@ -16,13 +15,11 @@ import com.vanyiung.quantguard.enums.InstrumentStatus;
 import com.vanyiung.quantguard.enums.OrderSide;
 import com.vanyiung.quantguard.enums.OrderStatus;
 import com.vanyiung.quantguard.enums.OrderType;
-import com.vanyiung.quantguard.enums.RiskConfigStatus;
 import com.vanyiung.quantguard.exception.BusinessRuleException;
 import com.vanyiung.quantguard.exception.ResourceNotFoundException;
 import com.vanyiung.quantguard.mapper.CashLedgerMapper;
 import com.vanyiung.quantguard.mapper.InvestmentPortfolioMapper;
 import com.vanyiung.quantguard.mapper.PortfolioPositionMapper;
-import com.vanyiung.quantguard.mapper.PortfolioRiskConfigMapper;
 import com.vanyiung.quantguard.mapper.SecurityInstrumentMapper;
 import com.vanyiung.quantguard.mapper.SimulatedOrderMapper;
 import com.vanyiung.quantguard.mapper.SimulationAccountMapper;
@@ -49,7 +46,6 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
     private final SimulationAccountMapper simulationAccountMapper;
     private final InvestmentPortfolioMapper investmentPortfolioMapper;
     private final SecurityInstrumentMapper securityInstrumentMapper;
-    private final PortfolioRiskConfigMapper portfolioRiskConfigMapper;
     private final PortfolioPositionMapper portfolioPositionMapper;
     private final CashLedgerMapper cashLedgerMapper;
 
@@ -57,14 +53,12 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
                                      SimulationAccountMapper simulationAccountMapper,
                                      InvestmentPortfolioMapper investmentPortfolioMapper,
                                      SecurityInstrumentMapper securityInstrumentMapper,
-                                     PortfolioRiskConfigMapper portfolioRiskConfigMapper,
                                      PortfolioPositionMapper portfolioPositionMapper,
                                      CashLedgerMapper cashLedgerMapper) {
         this.simulatedOrderMapper = simulatedOrderMapper;
         this.simulationAccountMapper = simulationAccountMapper;
         this.investmentPortfolioMapper = investmentPortfolioMapper;
         this.securityInstrumentMapper = securityInstrumentMapper;
-        this.portfolioRiskConfigMapper = portfolioRiskConfigMapper;
         this.portfolioPositionMapper = portfolioPositionMapper;
         this.cashLedgerMapper = cashLedgerMapper;
     }
@@ -80,13 +74,9 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
         InvestmentPortfolio portfolio = requireActivePortfolio(request.portfolioId());
         validateAccountAndPortfolio(account, portfolio);
         SecurityInstrument instrument = requireActiveInstrument(request.instrumentId());
-        PortfolioRiskConfig riskConfig = requireActiveRiskConfig(request.portfolioId());
         validateLotSize(request.requestedQuantity(), instrument.getLotSize());
 
         BigDecimal orderAmount = calculateOrderAmount(request.requestedQuantity(), request.limitPrice());
-        if (orderAmount.compareTo(riskConfig.getMaxSingleOrderAmount()) > 0) {
-            throw new BusinessRuleException("Order amount exceeds max single order amount");
-        }
 
         LocalDateTime now = LocalDateTime.now();
         SimulatedOrder order = new SimulatedOrder();
@@ -105,11 +95,11 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
         order.setVersion(0);
 
         if (request.side() == OrderSide.BUY) {
-            freezeCash(account, riskConfig, orderAmount);
+            freezeCash(account, orderAmount);
             order.setFrozenAmount(orderAmount);
             order.setFrozenQuantity(ZERO);
         } else {
-            freezePosition(request, riskConfig);
+            freezePosition(request);
             order.setFrozenAmount(ZERO);
             order.setFrozenQuantity(request.requestedQuantity());
         }
@@ -202,18 +192,6 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
         return instrument;
     }
 
-    private PortfolioRiskConfig requireActiveRiskConfig(Long portfolioId) {
-        PortfolioRiskConfig riskConfig = portfolioRiskConfigMapper.selectOne(Wrappers.<PortfolioRiskConfig>lambdaQuery()
-                .eq(PortfolioRiskConfig::getPortfolioId, portfolioId));
-        if (riskConfig == null) {
-            throw new ResourceNotFoundException("Portfolio risk config not found");
-        }
-        if (riskConfig.getStatus() != RiskConfigStatus.ACTIVE) {
-            throw new BusinessRuleException("Portfolio risk config is not active");
-        }
-        return riskConfig;
-    }
-
     private void validateLotSize(BigDecimal quantity, BigDecimal lotSize) {
         if (quantity.remainder(lotSize).compareTo(ZERO) != 0) {
             throw new BusinessRuleException("Requested quantity must be a multiple of lot size");
@@ -234,10 +212,7 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
         return orderAmount;
     }
 
-    private void freezeCash(SimulationAccount account, PortfolioRiskConfig riskConfig, BigDecimal orderAmount) {
-        if (!Boolean.TRUE.equals(riskConfig.getAllowBuy())) {
-            throw new BusinessRuleException("Buy orders are not allowed for this portfolio");
-        }
+    private void freezeCash(SimulationAccount account, BigDecimal orderAmount) {
         if (account.getAvailableCash().compareTo(orderAmount) < 0) {
             throw new BusinessRuleException("Available cash is insufficient");
         }
@@ -274,11 +249,7 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
         }
     }
 
-    private void freezePosition(CreateSimulatedOrderRequest request, PortfolioRiskConfig riskConfig) {
-        if (!Boolean.TRUE.equals(riskConfig.getAllowSell())) {
-            throw new BusinessRuleException("Sell orders are not allowed for this portfolio");
-        }
-
+    private void freezePosition(CreateSimulatedOrderRequest request) {
         PortfolioPosition position = portfolioPositionMapper.selectOne(Wrappers.<PortfolioPosition>lambdaQuery()
                 .eq(PortfolioPosition::getPortfolioId, request.portfolioId())
                 .eq(PortfolioPosition::getInstrumentId, request.instrumentId()));

@@ -2,10 +2,13 @@ package com.vanyiung.quantguard.service;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.vanyiung.quantguard.dto.DailyPriceSummaryResponse;
+import com.vanyiung.quantguard.dto.DailyPriceSyncRequest;
+import com.vanyiung.quantguard.dto.DailyPriceSyncResult;
 import com.vanyiung.quantguard.dto.ImportInstrumentsRequest;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewItem;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewRequest;
 import com.vanyiung.quantguard.dto.InstrumentImportResult;
+import com.vanyiung.quantguard.entity.InstrumentDailyPrice;
 import com.vanyiung.quantguard.entity.SecurityInstrument;
 import com.vanyiung.quantguard.enums.AssetType;
 import com.vanyiung.quantguard.enums.Exchange;
@@ -122,6 +125,22 @@ class MarketDataServiceImplTest {
         verify(dailyPriceMapper).delete(any());
         verify(syncLogMapper).delete(any());
         verify(securityInstrumentMapper, never()).deleteById(1L);
+    }
+
+    @Test
+    void syncFailsWhenProviderReturnsNoDailyBars() {
+        when(securityInstrumentMapper.selectById(1L)).thenReturn(activeInstrument());
+        when(dailyPriceMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+        when(marketDataProvider.providerName()).thenReturn("TUSHARE");
+        when(marketDataProvider.fetchDailyBars(any(), any(), any())).thenReturn(List.of());
+
+        DailyPriceSyncResult result = marketDataService.syncInstrumentDailyPrices(
+                1L, new DailyPriceSyncRequest(LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31), false), "MANUAL");
+
+        assertEquals("FAILED", result.status());
+        assertEquals(0, result.recordsReceived());
+        assertTrue(result.message().contains("No daily price rows returned"));
+        verify(dailyPriceMapper, never()).insert(any(InstrumentDailyPrice.class));
     }
 
     @Test

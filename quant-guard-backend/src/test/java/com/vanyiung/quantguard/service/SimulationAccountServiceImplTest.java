@@ -14,6 +14,7 @@ import com.vanyiung.quantguard.exception.DuplicateResourceException;
 import com.vanyiung.quantguard.exception.ResourceNotFoundException;
 import com.vanyiung.quantguard.mapper.CashLedgerMapper;
 import com.vanyiung.quantguard.mapper.InvestmentPortfolioMapper;
+import com.vanyiung.quantguard.mapper.PortfolioPositionMapper;
 import com.vanyiung.quantguard.mapper.SimulatedOrderMapper;
 import com.vanyiung.quantguard.mapper.SimulatedTradeMapper;
 import com.vanyiung.quantguard.mapper.SimulationAccountMapper;
@@ -24,8 +25,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,6 +47,9 @@ class SimulationAccountServiceImplTest {
     private InvestmentPortfolioMapper investmentPortfolioMapper;
 
     @Mock
+    private PortfolioPositionMapper portfolioPositionMapper;
+
+    @Mock
     private SimulatedOrderMapper simulatedOrderMapper;
 
     @Mock
@@ -52,12 +58,16 @@ class SimulationAccountServiceImplTest {
     @Mock
     private CashLedgerMapper cashLedgerMapper;
 
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+
     private SimulationAccountServiceImpl simulationAccountService;
 
     @BeforeEach
     void setUp() {
         simulationAccountService = new SimulationAccountServiceImpl(simulationAccountMapper,
-                investmentPortfolioMapper, simulatedOrderMapper, simulatedTradeMapper, cashLedgerMapper);
+                investmentPortfolioMapper, portfolioPositionMapper, simulatedOrderMapper, simulatedTradeMapper,
+                cashLedgerMapper, jdbcTemplate);
     }
 
     @Test
@@ -68,6 +78,7 @@ class SimulationAccountServiceImplTest {
             account.setId(1L);
             return 1;
         });
+        when(investmentPortfolioMapper.insert(any(InvestmentPortfolio.class))).thenReturn(1);
 
         SimulationAccountResponse response = simulationAccountService.create(
                 new CreateSimulationAccountRequest("  Long ETF  ", AccountType.LONG_TERM, new BigDecimal("100000.00")));
@@ -79,6 +90,14 @@ class SimulationAccountServiceImplTest {
         ArgumentCaptor<SimulationAccount> accountCaptor = ArgumentCaptor.forClass(SimulationAccount.class);
         verify(simulationAccountMapper).insert(accountCaptor.capture());
         assertEquals("Long ETF", accountCaptor.getValue().getAccountName());
+
+        ArgumentCaptor<InvestmentPortfolio> portfolioCaptor =
+                ArgumentCaptor.forClass(InvestmentPortfolio.class);
+        verify(investmentPortfolioMapper).insert(portfolioCaptor.capture());
+        assertEquals(1L, portfolioCaptor.getValue().getAccountId());
+        assertEquals("默认组合", portfolioCaptor.getValue().getPortfolioName());
+        assertEquals(AccountType.LONG_TERM, portfolioCaptor.getValue().getPortfolioType());
+        assertEquals(AccountStatus.ACTIVE, portfolioCaptor.getValue().getStatus());
     }
 
     @Test
@@ -99,7 +118,7 @@ class SimulationAccountServiceImplTest {
     @Test
     void emptyAccountCanBeDeleted() {
         when(simulationAccountMapper.selectById(1L)).thenReturn(account());
-        when(investmentPortfolioMapper.exists(any())).thenReturn(false);
+        when(investmentPortfolioMapper.selectList(any())).thenReturn(List.of());
         when(simulatedOrderMapper.exists(any())).thenReturn(false);
         when(simulatedTradeMapper.exists(any())).thenReturn(false);
         when(cashLedgerMapper.exists(any())).thenReturn(false);
@@ -111,9 +130,30 @@ class SimulationAccountServiceImplTest {
     }
 
     @Test
-    void accountWithPortfolioCannotBeDeleted() {
+    void accountWithOnlyEmptyPortfoliosCanBeDeleted() {
         when(simulationAccountMapper.selectById(1L)).thenReturn(account());
-        when(investmentPortfolioMapper.exists(any())).thenReturn(true);
+        when(investmentPortfolioMapper.selectList(any())).thenReturn(List.of(portfolio(10L)));
+        when(simulatedOrderMapper.exists(any())).thenReturn(false);
+        when(simulatedTradeMapper.exists(any())).thenReturn(false);
+        when(cashLedgerMapper.exists(any())).thenReturn(false);
+        when(portfolioPositionMapper.exists(any())).thenReturn(false);
+        when(simulationAccountMapper.deleteById(1L)).thenReturn(1);
+
+        simulationAccountService.delete(1L);
+
+        verify(jdbcTemplate).update("DELETE FROM portfolio_risk_config WHERE portfolio_id = ?", 10L);
+        verify(investmentPortfolioMapper).delete(any());
+        verify(simulationAccountMapper).deleteById(1L);
+    }
+
+    @Test
+    void accountWithPortfolioPositionCannotBeDeleted() {
+        when(simulationAccountMapper.selectById(1L)).thenReturn(account());
+        when(investmentPortfolioMapper.selectList(any())).thenReturn(List.of(portfolio(10L)));
+        when(simulatedOrderMapper.exists(any())).thenReturn(false);
+        when(simulatedTradeMapper.exists(any())).thenReturn(false);
+        when(cashLedgerMapper.exists(any())).thenReturn(false);
+        when(portfolioPositionMapper.exists(any())).thenReturn(true);
 
         assertThrows(BusinessRuleException.class, () -> simulationAccountService.delete(1L));
 
@@ -123,7 +163,7 @@ class SimulationAccountServiceImplTest {
     @Test
     void accountWithOrderCannotBeDeleted() {
         when(simulationAccountMapper.selectById(1L)).thenReturn(account());
-        when(investmentPortfolioMapper.exists(any())).thenReturn(false);
+        when(investmentPortfolioMapper.selectList(any())).thenReturn(List.of());
         when(simulatedOrderMapper.exists(any())).thenReturn(true);
 
         assertThrows(BusinessRuleException.class, () -> simulationAccountService.delete(1L));
@@ -134,7 +174,7 @@ class SimulationAccountServiceImplTest {
     @Test
     void accountWithTradeCannotBeDeleted() {
         when(simulationAccountMapper.selectById(1L)).thenReturn(account());
-        when(investmentPortfolioMapper.exists(any())).thenReturn(false);
+        when(investmentPortfolioMapper.selectList(any())).thenReturn(List.of());
         when(simulatedOrderMapper.exists(any())).thenReturn(false);
         when(simulatedTradeMapper.exists(any())).thenReturn(true);
 
@@ -146,7 +186,7 @@ class SimulationAccountServiceImplTest {
     @Test
     void accountWithCashLedgerCannotBeDeleted() {
         when(simulationAccountMapper.selectById(1L)).thenReturn(account());
-        when(investmentPortfolioMapper.exists(any())).thenReturn(false);
+        when(investmentPortfolioMapper.selectList(any())).thenReturn(List.of());
         when(simulatedOrderMapper.exists(any())).thenReturn(false);
         when(simulatedTradeMapper.exists(any())).thenReturn(false);
         when(cashLedgerMapper.exists(any())).thenReturn(true);
@@ -154,6 +194,33 @@ class SimulationAccountServiceImplTest {
         assertThrows(BusinessRuleException.class, () -> simulationAccountService.delete(1L));
 
         verify(simulationAccountMapper, never()).deleteById(1L);
+    }
+
+    @Test
+    void forceDeleteRemovesAccountSimulationData() {
+        when(simulationAccountMapper.selectById(1L)).thenReturn(account());
+        when(investmentPortfolioMapper.selectList(any())).thenReturn(List.of(portfolio(10L), portfolio(11L)));
+        when(simulationAccountMapper.deleteById(1L)).thenReturn(1);
+
+        simulationAccountService.forceDelete(1L);
+
+        verify(cashLedgerMapper).delete(any());
+        verify(simulatedTradeMapper).delete(any());
+        verify(simulatedOrderMapper).delete(any());
+        verify(portfolioPositionMapper).delete(any());
+        verify(jdbcTemplate).update("DELETE FROM portfolio_risk_config WHERE portfolio_id = ?", 10L);
+        verify(jdbcTemplate).update("DELETE FROM portfolio_risk_config WHERE portfolio_id = ?", 11L);
+        verify(investmentPortfolioMapper).delete(any());
+        verify(simulationAccountMapper).deleteById(1L);
+    }
+
+    @Test
+    void forceDeleteRejectsMissingAccount() {
+        when(simulationAccountMapper.selectById(999L)).thenReturn(null);
+
+        assertThrows(ResourceNotFoundException.class, () -> simulationAccountService.forceDelete(999L));
+
+        verify(simulationAccountMapper, never()).deleteById(999L);
     }
 
     @Test
@@ -213,5 +280,15 @@ class SimulationAccountServiceImplTest {
         account.setStatus(AccountStatus.ACTIVE);
         account.setVersion(0);
         return account;
+    }
+
+    private InvestmentPortfolio portfolio(Long id) {
+        InvestmentPortfolio portfolio = new InvestmentPortfolio();
+        portfolio.setId(id);
+        portfolio.setAccountId(1L);
+        portfolio.setPortfolioName("Core ETF");
+        portfolio.setPortfolioType(AccountType.LONG_TERM);
+        portfolio.setStatus(AccountStatus.ACTIVE);
+        return portfolio;
     }
 }

@@ -66,4 +66,10 @@ public class InvestmentPortfolioController {
         investmentPortfolioService.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
+
+    @DeleteMapping("/portfolios/{id}/force")
+    public ResponseEntity<ApiResponse<Void>> forceDelete(@PathVariable @Positive(message = "id must be positive") Long id) {
+        investmentPortfolioService.forceDelete(id);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
 }

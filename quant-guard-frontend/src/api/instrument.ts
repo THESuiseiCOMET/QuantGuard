@@ -12,3 +12,7 @@ export function updateInstrumentStatus(id: number, status: InstrumentStatus) {
 export function deleteInstrument(id: number) {
   return http.delete(`/instruments/${id}`) as Promise<null>
 }
+
+export function forceDeleteInstrument(id: number) {
+  return http.delete(`/instruments/${id}/force`) as Promise<null>
+}

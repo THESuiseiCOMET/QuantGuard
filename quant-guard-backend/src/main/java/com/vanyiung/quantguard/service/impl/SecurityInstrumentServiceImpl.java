@@ -158,6 +158,32 @@ public class SecurityInstrumentServiceImpl implements SecurityInstrumentService 
         }
     }
 
+    @Override
+    @Transactional
+    public void forceDelete(Long id) {
+        requireInstrument(id);
+        if (hasRunningSync(id)) {
+            throw new BusinessRuleException("Security instrument has a running market data sync task");
+        }
+
+        cashLedgerMapper.delete(Wrappers.<CashLedger>query()
+                .inSql("order_id", "select id from simulated_order where instrument_id = " + id));
+        simulatedTradeMapper.delete(Wrappers.<SimulatedTrade>lambdaQuery()
+                .eq(SimulatedTrade::getInstrumentId, id));
+        simulatedOrderMapper.delete(Wrappers.<SimulatedOrder>lambdaQuery()
+                .eq(SimulatedOrder::getInstrumentId, id));
+        portfolioPositionMapper.delete(Wrappers.<PortfolioPosition>lambdaQuery()
+                .eq(PortfolioPosition::getInstrumentId, id));
+        dailyPriceMapper.delete(Wrappers.<InstrumentDailyPrice>lambdaQuery()
+                .eq(InstrumentDailyPrice::getInstrumentId, id));
+        syncLogMapper.delete(Wrappers.<MarketDataSyncLog>lambdaQuery()
+                .eq(MarketDataSyncLog::getInstrumentId, id));
+        int deletedRows = securityInstrumentMapper.deleteById(id);
+        if (deletedRows != 1) {
+            throw new BusinessRuleException("Security instrument delete failed, please retry");
+        }
+    }
+
     private SecurityInstrument requireInstrument(Long id) {
         SecurityInstrument instrument = securityInstrumentMapper.selectById(id);
         if (instrument == null) {

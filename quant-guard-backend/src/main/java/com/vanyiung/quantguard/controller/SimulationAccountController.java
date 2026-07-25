@@ -60,4 +60,10 @@ public class SimulationAccountController {
         simulationAccountService.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
+
+    @DeleteMapping("/{id}/force")
+    public ResponseEntity<ApiResponse<Void>> forceDelete(@PathVariable @Positive(message = "id must be positive") Long id) {
+        simulationAccountService.forceDelete(id);
+        return ResponseEntity.ok(ApiResponse.success(null));
+    }
 }

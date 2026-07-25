@@ -39,11 +39,17 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
       - name: Run frontend type check
         run: npm run type-check
 
       - name: Run frontend lint
         run: npm run lint
+
+      - name: Run frontend browser tests
+        run: npm run test:e2e
 
       - name: Build frontend
         run: npm run build

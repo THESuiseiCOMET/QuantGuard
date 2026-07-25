@@ -5,6 +5,7 @@ import com.vanyiung.quantguard.dto.CreateSimulationAccountRequest;
 import com.vanyiung.quantguard.dto.SimulationAccountResponse;
 import com.vanyiung.quantguard.entity.CashLedger;
 import com.vanyiung.quantguard.entity.InvestmentPortfolio;
+import com.vanyiung.quantguard.entity.PortfolioPosition;
 import com.vanyiung.quantguard.entity.SimulatedOrder;
 import com.vanyiung.quantguard.entity.SimulatedTrade;
 import com.vanyiung.quantguard.entity.SimulationAccount;
@@ -15,11 +16,13 @@ import com.vanyiung.quantguard.exception.DuplicateResourceException;
 import com.vanyiung.quantguard.exception.ResourceNotFoundException;
 import com.vanyiung.quantguard.mapper.CashLedgerMapper;
 import com.vanyiung.quantguard.mapper.InvestmentPortfolioMapper;
+import com.vanyiung.quantguard.mapper.PortfolioPositionMapper;
 import com.vanyiung.quantguard.mapper.SimulatedOrderMapper;
 import com.vanyiung.quantguard.mapper.SimulatedTradeMapper;
 import com.vanyiung.quantguard.mapper.SimulationAccountMapper;
 import com.vanyiung.quantguard.service.SimulationAccountService;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,20 +35,26 @@ public class SimulationAccountServiceImpl implements SimulationAccountService {
 
     private final SimulationAccountMapper simulationAccountMapper;
     private final InvestmentPortfolioMapper investmentPortfolioMapper;
+    private final PortfolioPositionMapper portfolioPositionMapper;
     private final SimulatedOrderMapper simulatedOrderMapper;
     private final SimulatedTradeMapper simulatedTradeMapper;
     private final CashLedgerMapper cashLedgerMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     public SimulationAccountServiceImpl(SimulationAccountMapper simulationAccountMapper,
                                         InvestmentPortfolioMapper investmentPortfolioMapper,
+                                        PortfolioPositionMapper portfolioPositionMapper,
                                         SimulatedOrderMapper simulatedOrderMapper,
                                         SimulatedTradeMapper simulatedTradeMapper,
-                                        CashLedgerMapper cashLedgerMapper) {
+                                        CashLedgerMapper cashLedgerMapper,
+                                        JdbcTemplate jdbcTemplate) {
         this.simulationAccountMapper = simulationAccountMapper;
         this.investmentPortfolioMapper = investmentPortfolioMapper;
+        this.portfolioPositionMapper = portfolioPositionMapper;
         this.simulatedOrderMapper = simulatedOrderMapper;
         this.simulatedTradeMapper = simulatedTradeMapper;
         this.cashLedgerMapper = cashLedgerMapper;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
@@ -76,6 +85,7 @@ public class SimulationAccountServiceImpl implements SimulationAccountService {
             throw new DuplicateResourceException("Simulation account name already exists");
         }
 
+        createDefaultPortfolio(account, now);
         return SimulationAccountResponse.from(account);
     }
 
@@ -119,7 +129,43 @@ public class SimulationAccountServiceImpl implements SimulationAccountService {
     @Transactional
     public void delete(Long id) {
         SimulationAccount account = requireAccount(id);
-        ensureAccountCanBeDeleted(account);
+        List<Long> portfolioIds = ensureAccountCanBeDeleted(account);
+        if (!portfolioIds.isEmpty()) {
+            deleteLegacyRiskConfigs(portfolioIds);
+            investmentPortfolioMapper.delete(Wrappers.<InvestmentPortfolio>lambdaQuery()
+                    .eq(InvestmentPortfolio::getAccountId, id));
+        }
+        int deletedRows = simulationAccountMapper.deleteById(id);
+        if (deletedRows != 1) {
+            throw new BusinessRuleException("Simulation account deletion failed, please retry");
+        }
+    }
+
+    @Override
+    @Transactional
+    public void forceDelete(Long id) {
+        requireAccount(id);
+        List<Long> portfolioIds = investmentPortfolioMapper.selectList(Wrappers.<InvestmentPortfolio>lambdaQuery()
+                        .eq(InvestmentPortfolio::getAccountId, id))
+                .stream()
+                .map(InvestmentPortfolio::getId)
+                .toList();
+
+        cashLedgerMapper.delete(Wrappers.<CashLedger>lambdaQuery()
+                .eq(CashLedger::getAccountId, id));
+        simulatedTradeMapper.delete(Wrappers.<SimulatedTrade>lambdaQuery()
+                .eq(SimulatedTrade::getAccountId, id));
+        simulatedOrderMapper.delete(Wrappers.<SimulatedOrder>lambdaQuery()
+                .eq(SimulatedOrder::getAccountId, id));
+
+        if (!portfolioIds.isEmpty()) {
+            portfolioPositionMapper.delete(Wrappers.<PortfolioPosition>query()
+                    .in("portfolio_id", portfolioIds));
+            deleteLegacyRiskConfigs(portfolioIds);
+            investmentPortfolioMapper.delete(Wrappers.<InvestmentPortfolio>lambdaQuery()
+                    .eq(InvestmentPortfolio::getAccountId, id));
+        }
+
         int deletedRows = simulationAccountMapper.deleteById(id);
         if (deletedRows != 1) {
             throw new BusinessRuleException("Simulation account deletion failed, please retry");
@@ -134,6 +180,22 @@ public class SimulationAccountServiceImpl implements SimulationAccountService {
         return account;
     }
 
+    private void createDefaultPortfolio(SimulationAccount account, LocalDateTime now) {
+        InvestmentPortfolio portfolio = new InvestmentPortfolio();
+        portfolio.setAccountId(account.getId());
+        portfolio.setPortfolioName("默认组合");
+        portfolio.setPortfolioType(account.getAccountType());
+        portfolio.setDescription(null);
+        portfolio.setStatus(AccountStatus.ACTIVE);
+        portfolio.setCreatedAt(now);
+        portfolio.setUpdatedAt(now);
+
+        int insertedRows = investmentPortfolioMapper.insert(portfolio);
+        if (insertedRows != 1) {
+            throw new BusinessRuleException("Default investment portfolio creation failed");
+        }
+    }
+
     private void ensureAccountCanBeDisabled(SimulationAccount account) {
         if (account.getFrozenCash().compareTo(BigDecimal.ZERO) > 0) {
             throw new BusinessRuleException("Account has frozen cash and cannot be disabled");
@@ -145,20 +207,32 @@ public class SimulationAccountServiceImpl implements SimulationAccountService {
         }
     }
 
-    private void ensureAccountCanBeDeleted(SimulationAccount account) {
-        boolean hasRelatedData = investmentPortfolioMapper.exists(Wrappers.<InvestmentPortfolio>lambdaQuery()
-                .eq(InvestmentPortfolio::getAccountId, account.getId()))
-                || simulatedOrderMapper.exists(Wrappers.<SimulatedOrder>lambdaQuery()
+    private List<Long> ensureAccountCanBeDeleted(SimulationAccount account) {
+        List<Long> portfolioIds = investmentPortfolioMapper.selectList(Wrappers.<InvestmentPortfolio>lambdaQuery()
+                        .eq(InvestmentPortfolio::getAccountId, account.getId()))
+                .stream()
+                .map(InvestmentPortfolio::getId)
+                .toList();
+        boolean hasRelatedData = simulatedOrderMapper.exists(Wrappers.<SimulatedOrder>lambdaQuery()
                 .eq(SimulatedOrder::getAccountId, account.getId()))
                 || simulatedTradeMapper.exists(Wrappers.<SimulatedTrade>lambdaQuery()
                 .eq(SimulatedTrade::getAccountId, account.getId()))
                 || cashLedgerMapper.exists(Wrappers.<CashLedger>lambdaQuery()
-                .eq(CashLedger::getAccountId, account.getId()));
+                .eq(CashLedger::getAccountId, account.getId()))
+                || (!portfolioIds.isEmpty() && portfolioPositionMapper.exists(Wrappers.<PortfolioPosition>query()
+                .in("portfolio_id", portfolioIds)));
         boolean cashUntouched = account.getFrozenCash().compareTo(BigDecimal.ZERO) == 0
                 && account.getAvailableCash().compareTo(account.getInitialCash()) == 0;
         if (hasRelatedData || !cashUntouched) {
             throw new BusinessRuleException(
                     "Simulation account has related business data and cannot be deleted. Disable it instead.");
+        }
+        return portfolioIds;
+    }
+
+    private void deleteLegacyRiskConfigs(List<Long> portfolioIds) {
+        for (Long portfolioId : portfolioIds) {
+            jdbcTemplate.update("DELETE FROM portfolio_risk_config WHERE portfolio_id = ?", portfolioId);
         }
     }
 }

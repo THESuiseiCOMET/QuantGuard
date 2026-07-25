@@ -9,6 +9,8 @@
     "type-check": "vue-tsc -b",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "test:e2e": "playwright test",
+    "test": "npm run test:e2e",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -22,6 +24,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.0",
     "@types/node": "^24.13.2",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/tsconfig": "^0.9.1",

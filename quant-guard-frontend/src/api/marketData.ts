@@ -10,6 +10,8 @@ import type {
   ImportPreviewItem,
   InstrumentImportPreviewRequest,
   InstrumentImportResult,
+  MarketDataProviderConfig,
+  UpdateMarketDataProviderConfigRequest,
 } from '@/types/marketData'
 
 export function previewInstrumentImport(request: InstrumentImportPreviewRequest) {
@@ -29,6 +31,14 @@ export function syncInstrumentDailyPrices(instrumentId: number, request: DailyPr
 
 export function syncMultipleInstrumentDailyPrices(request: BatchDailyPriceSyncRequest) {
   return http.post('/market-data/daily-prices/sync', request) as Promise<BatchDailyPriceSyncResult>
+}
+
+export function getMarketDataProviderConfig() {
+  return http.get('/market-data/config') as Promise<MarketDataProviderConfig>
+}
+
+export function updateMarketDataProviderConfig(request: UpdateMarketDataProviderConfigRequest) {
+  return http.put('/market-data/config', request) as Promise<MarketDataProviderConfig>
 }
 
 export function listInstrumentDailyPrices(

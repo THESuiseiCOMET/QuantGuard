@@ -1,19 +1,20 @@
 <template>
   <section class="page">
-    <PageHeader title="行情中心" description="导入 A 股证券标的，同步未复权历史日线并查看日 K。">
-      <template #actions>
-        <el-space>
-          <el-button :loading="loading" @click="loadInstruments">刷新列表</el-button>
-          <el-button type="primary" @click="dialogVisible = true">批量导入</el-button>
-        </el-space>
-      </template>
-    </PageHeader>
+    <PageHeader v-if="!embedded" title="行情中心" />
 
-    <el-alert v-if="errorMessage" :title="errorMessage" type="error" show-icon :closable="false" />
+    <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" />
 
     <div class="market-layout">
       <aside class="surface instrument-panel">
-        <div class="panel-title">股票列表</div>
+        <div class="panel-title">
+          <div>
+            <span>证券列表</span>
+            <small>{{ filteredInstruments.length }} 只</small>
+          </div>
+          <el-button size="small" type="primary" :icon="Plus" @click="dialogVisible = true">
+            导入股票
+          </el-button>
+        </div>
         <el-input v-model="filters.keyword" placeholder="搜索代码或名称" clearable />
         <el-space class="filter-row" fill>
           <el-select v-model="filters.exchange" placeholder="交易所" clearable>
@@ -28,14 +29,13 @@
 
         <el-alert
           v-if="filteredInstruments.length === 0"
-          title="暂无 A 股证券标的"
-          description="请先通过批量导入添加股票代码。"
+          title="暂无证券"
+          description="请先导入证券代码。"
           type="info"
-          show-icon
           :closable="false"
         />
 
-        <el-scrollbar height="560px">
+        <el-scrollbar class="instrument-scroll">
           <div
             v-for="instrument in filteredInstruments"
             :key="instrument.id"
@@ -48,11 +48,10 @@
               @click="selectInstrument(instrument.id)"
             >
               <span>
-                <strong>{{ instrument.symbol }}</strong>
-                <small>{{ instrument.instrumentName }}</small>
+                <strong>{{ instrumentDisplayName(instrument) }}</strong>
+                <small>{{ instrumentSecondaryText(instrument) }}</small>
               </span>
               <span class="instrument-tags">
-                <el-tag size="small" effect="plain">{{ instrument.exchange }}</el-tag>
                 <el-tag
                   size="small"
                   :type="instrument.status === 'ACTIVE' ? 'success' : 'info'"
@@ -63,7 +62,6 @@
               </span>
             </button>
             <div class="instrument-actions">
-              <el-button size="small" link @click="selectInstrument(instrument.id)">查看</el-button>
               <el-button
                 size="small"
                 link
@@ -86,25 +84,19 @@
                     <el-dropdown-item command="delete" divided class="danger-menu-item">
                       永久删除
                     </el-dropdown-item>
+                    <el-dropdown-item command="force-delete" class="danger-menu-item">
+                      硬删除
+                    </el-dropdown-item>
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
             </div>
           </div>
         </el-scrollbar>
-
-        <el-button
-          class="sync-all"
-          :disabled="selectedIds.length === 0"
-          :loading="batchSyncing"
-          @click="syncSelected"
-        >
-          同步选中证券
-        </el-button>
       </aside>
 
-      <main class="market-main">
-        <div class="surface summary-grid">
+      <main class="surface market-main">
+        <div class="summary-grid">
           <div>
             <span>当前证券</span>
             <strong>{{ selectedInstrumentLabel }}</strong>
@@ -112,77 +104,81 @@
           <div>
             <span>最新日线日期</span>
             <strong>{{ summary?.latestTradeDate ?? '暂无数据' }}</strong>
+            <small>
+              {{ prices.length }} 条日线 · 最后同步
+              {{ formatDateTime(summary?.lastSyncAt) }}
+            </small>
+          </div>
+          <div data-testid="range-high">
+            <span>当前范围最高价</span>
+            <strong>{{ formatDecimal(rangeHigh) }}</strong>
+          </div>
+          <div>
+            <span>最新涨跌幅</span>
+            <strong :class="changeClass(summary?.latestPercentageChange)">
+              {{ signed(summary?.latestPercentageChange, '%') }}
+            </strong>
           </div>
           <div>
             <span>最新收盘价</span>
             <strong>{{ formatDecimal(summary?.latestClose) }}</strong>
           </div>
-          <div>
-            <span>最新涨跌幅</span>
-            <strong>{{ signed(summary?.latestPercentageChange, '%') }}</strong>
-          </div>
-          <div>
-            <span>当前范围最高价</span>
-            <strong>{{ formatDecimal(summary?.periodHigh) }}</strong>
-          </div>
-          <div>
+          <div data-testid="range-low">
             <span>当前范围最低价</span>
-            <strong>{{ formatDecimal(summary?.periodLow) }}</strong>
-          </div>
-          <div>
-            <span>数据条数</span>
-            <strong>{{ prices.length }}</strong>
-          </div>
-          <div>
-            <span>最后同步时间</span>
-            <strong>{{ formatDateTime(summary?.lastSyncAt) }}</strong>
+            <strong>{{ formatDecimal(rangeLow) }}</strong>
           </div>
         </div>
 
-        <div class="surface toolbar">
-          <el-radio-group v-model="rangeKey" @change="loadPrices">
-            <el-radio-button label="1M">1个月</el-radio-button>
-            <el-radio-button label="3M">3个月</el-radio-button>
-            <el-radio-button label="6M">6个月</el-radio-button>
-            <el-radio-button label="1Y">1年</el-radio-button>
-            <el-radio-button label="3Y">3年</el-radio-button>
-            <el-radio-button label="ALL">全部</el-radio-button>
-          </el-radio-group>
-
-          <el-space>
-            <el-button
-              :disabled="!selectedInstrumentId"
-              :loading="priceLoading"
-              @click="loadPrices"
+        <div class="toolbar">
+          <div class="range-tools">
+            <el-radio-group
+              :model-value="displayRangeKey"
+              size="small"
+              @change="handleRangeSelection"
             >
-              刷新行情
-            </el-button>
+              <el-radio-button value="1M">1月</el-radio-button>
+              <el-radio-button value="3M">3月</el-radio-button>
+              <el-radio-button value="6M">6月</el-radio-button>
+              <el-radio-button value="1Y">1年</el-radio-button>
+              <el-radio-button value="3Y">3年</el-radio-button>
+              <el-radio-button value="ALL">全部</el-radio-button>
+              <el-radio-button v-if="customRangeActive" value="CUSTOM">自定义</el-radio-button>
+            </el-radio-group>
+          </div>
+
+          <el-space class="market-actions">
             <el-button
               type="primary"
+              :icon="Refresh"
               :disabled="!selectedInstrumentId || selectedInstrument?.status !== 'ACTIVE'"
               :loading="syncing"
               title="停用证券需先恢复后才能同步行情"
               @click="syncCurrent"
             >
-              同步当前证券
+              同步行情
+            </el-button>
+            <el-button
+              :icon="ShoppingCart"
+              :disabled="!selectedInstrumentId || selectedInstrument?.status !== 'ACTIVE'"
+              @click="goToOrder"
+            >
+              去下单
             </el-button>
           </el-space>
         </div>
 
-        <el-alert
-          title="最新日线收盘价，不是实时成交价。当前为未复权历史行情。"
-          type="info"
-          show-icon
-          :closable="false"
-        />
-
-        <div class="surface chart-panel">
+        <div class="chart-panel">
           <el-empty v-if="!selectedInstrumentId" description="请选择一只证券查看 K 线" />
           <el-empty
             v-else-if="!priceLoading && prices.length === 0"
             description="当前证券暂无历史日线，请重新同步行情。"
           />
-          <CandlestickChart v-else v-loading="priceLoading" :prices="prices" />
+          <CandlestickChart
+            v-else
+            v-loading="priceLoading"
+            :prices="prices"
+            @visible-range-change="handleVisibleRangeChange"
+          />
         </div>
       </main>
     </div>
@@ -283,9 +279,16 @@
 <script setup lang="ts">
 /* global window */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Refresh, ShoppingCart } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
-import { deleteInstrument, listInstruments, updateInstrumentStatus } from '@/api/instrument'
+import {
+  deleteInstrument,
+  forceDeleteInstrument,
+  listInstruments,
+  updateInstrumentStatus,
+} from '@/api/instrument'
 import {
   clearInstrumentDailyPrices,
   getInstrumentDailyPriceSummary,
@@ -293,7 +296,6 @@ import {
   listInstrumentDailyPrices,
   previewInstrumentImport,
   syncInstrumentDailyPrices,
-  syncMultipleInstrumentDailyPrices,
 } from '@/api/marketData'
 import type { SecurityInstrument } from '@/types/instrument'
 import type {
@@ -305,8 +307,21 @@ import type {
 import CandlestickChart from './components/CandlestickChart.vue'
 
 type RangeKey = '1M' | '3M' | '6M' | '1Y' | '3Y' | 'ALL'
+type DisplayRangeKey = RangeKey | 'CUSTOM'
+type VisibleRange = {
+  startIndex: number
+  endIndex: number
+}
+type ChartVisibleRange = VisibleRange & {
+  userInitiated: boolean
+}
 
 const storageKey = 'quantguard.market-data.selectedInstrumentId'
+const router = useRouter()
+
+defineProps<{
+  embedded?: boolean
+}>()
 
 const instruments = ref<SecurityInstrument[]>([])
 const selectedInstrumentId = ref<number | null>(restoreSelectedInstrument())
@@ -316,7 +331,6 @@ const loading = ref(false)
 const priceLoading = ref(false)
 const syncing = ref(false)
 const syncingInstrumentId = ref<number | null>(null)
-const batchSyncing = ref(false)
 const previewing = ref(false)
 const importing = ref(false)
 const errorMessage = ref('')
@@ -327,6 +341,8 @@ const syncOnImport = ref(true)
 const previewItems = ref<ImportPreviewItem[]>([])
 const importResults = ref<InstrumentImportResult[]>([])
 const rangeKey = ref<RangeKey>('1Y')
+const visibleRange = ref<VisibleRange | null>(null)
+const customRangeActive = ref(false)
 let requestSeq = 0
 
 const filters = reactive<{
@@ -341,7 +357,7 @@ const filters = reactive<{
 
 const filteredInstruments = computed(() =>
   instruments.value.filter((instrument) => {
-    if (instrument.assetType !== 'STOCK') return false
+    if (instrument.assetType !== 'STOCK' && instrument.assetType !== 'ETF') return false
     if (instrument.exchange !== 'SSE' && instrument.exchange !== 'SZSE') return false
     if (filters.exchange && instrument.exchange !== filters.exchange) return false
     if (filters.status && instrument.status !== filters.status) return false
@@ -360,14 +376,34 @@ const selectedInstrument = computed(
 
 const selectedInstrumentLabel = computed(() => {
   if (!selectedInstrument.value) return '未选择'
-  return `${selectedInstrument.value.symbol} · ${selectedInstrument.value.instrumentName}`
+  const displayName = instrumentDisplayName(selectedInstrument.value)
+  return displayName === selectedInstrument.value.symbol
+    ? `${selectedInstrument.value.symbol} · ${selectedInstrument.value.exchange}`
+    : `${displayName} · ${selectedInstrument.value.symbol}`
 })
 
-const selectedIds = computed(() =>
-  filteredInstruments.value.filter((item) => item.status === 'ACTIVE').map((item) => item.id),
+const validPreviewCount = computed(() => previewItems.value.filter((item) => item.valid).length)
+
+const displayRangeKey = computed<DisplayRangeKey>(() =>
+  customRangeActive.value ? 'CUSTOM' : rangeKey.value,
 )
 
-const validPreviewCount = computed(() => previewItems.value.filter((item) => item.valid).length)
+const visiblePrices = computed(() => {
+  if (!visibleRange.value) return prices.value
+  const startIndex = Math.max(0, visibleRange.value.startIndex)
+  const endIndex = Math.min(prices.value.length - 1, visibleRange.value.endIndex)
+  return prices.value.slice(startIndex, endIndex + 1)
+})
+
+const rangeHigh = computed(() => {
+  const highs = visiblePrices.value.map((price) => Number(price.high)).filter(Number.isFinite)
+  return highs.length > 0 ? Math.max(...highs) : null
+})
+
+const rangeLow = computed(() => {
+  const lows = visiblePrices.value.map((price) => Number(price.low)).filter(Number.isFinite)
+  return lows.length > 0 ? Math.min(...lows) : null
+})
 
 onMounted(() => {
   void loadInstruments()
@@ -397,6 +433,8 @@ async function loadInstruments() {
 }
 
 async function loadPrices() {
+  visibleRange.value = null
+  customRangeActive.value = false
   if (!selectedInstrumentId.value) {
     prices.value = []
     summary.value = null
@@ -418,11 +456,38 @@ async function loadPrices() {
     if (seq !== requestSeq) return
     const message = error instanceof Error ? error.message : ''
     errorMessage.value = message.includes('TUSHARE_TOKEN')
-      ? '行情服务尚未配置。请在本地环境设置 TUSHARE_TOKEN。'
+      ? '行情服务尚未配置。请在“设置”中填写 Tushare Token。'
       : '历史日线加载失败，请确认后端服务是否已启动。'
   } finally {
     if (seq === requestSeq) priceLoading.value = false
   }
+}
+
+function handleRangeSelection(value: string | number | boolean | undefined) {
+  if (value === 'CUSTOM' || !isRangeKey(value)) return
+  rangeKey.value = value
+  void loadPrices()
+}
+
+function handleVisibleRangeChange(range: ChartVisibleRange) {
+  if (prices.value.length === 0) return
+  const lastIndex = prices.value.length - 1
+  const startIndex = Math.min(lastIndex, Math.max(0, range.startIndex))
+  const endIndex = Math.min(lastIndex, Math.max(startIndex, range.endIndex))
+  const isFullRange = startIndex === 0 && endIndex === lastIndex
+  visibleRange.value = isFullRange ? null : { startIndex, endIndex }
+  customRangeActive.value = range.userInitiated && !isFullRange
+}
+
+function isRangeKey(value: unknown): value is RangeKey {
+  return (
+    value === '1M' ||
+    value === '3M' ||
+    value === '6M' ||
+    value === '1Y' ||
+    value === '3Y' ||
+    value === 'ALL'
+  )
 }
 
 async function previewImport() {
@@ -440,7 +505,7 @@ async function previewImport() {
   } catch (error) {
     const message = error instanceof Error ? error.message : ''
     errorMessage.value = message.includes('TUSHARE_TOKEN')
-      ? '行情服务尚未配置。请在本地环境设置 TUSHARE_TOKEN。'
+      ? '行情服务尚未配置。请在“设置”中填写 Tushare Token。'
       : '导入预览失败，请检查后端服务。'
   } finally {
     previewing.value = false
@@ -488,8 +553,10 @@ async function syncInstrument(instrument: SecurityInstrument) {
       endDate: null,
       fullRefresh: false,
     })
-    if (result.status === 'SUCCESS') {
+    if (result.status === 'SUCCESS' && result.recordsReceived > 0) {
       ElMessage.success('同步完成')
+    } else if (result.status === 'SUCCESS') {
+      ElMessage.warning('同步完成，但没有收到新的日线数据')
     } else {
       ElMessage.warning(result.message)
     }
@@ -502,17 +569,9 @@ async function syncInstrument(instrument: SecurityInstrument) {
   }
 }
 
-async function syncSelected() {
-  if (selectedIds.value.length === 0) return
-  batchSyncing.value = true
-
-  try {
-    const result = await syncMultipleInstrumentDailyPrices({ instrumentIds: selectedIds.value })
-    ElMessage.success(`同步完成：成功 ${result.successCount}，失败 ${result.failedCount}`)
-    await loadPrices()
-  } finally {
-    batchSyncing.value = false
-  }
+function goToOrder() {
+  if (!selectedInstrumentId.value) return
+  void router.push({ path: '/orders', query: { instrumentId: String(selectedInstrumentId.value) } })
 }
 
 function selectInstrument(id: number) {
@@ -543,6 +602,10 @@ async function handleInstrumentCommand(instrument: SecurityInstrument, command: 
   }
   if (command === 'delete') {
     await removeInstrument(instrument)
+    return
+  }
+  if (command === 'force-delete') {
+    await forceRemoveInstrument(instrument)
   }
 }
 
@@ -591,6 +654,23 @@ async function removeInstrument(instrument: SecurityInstrument) {
   await loadInstruments()
 }
 
+async function forceRemoveInstrument(instrument: SecurityInstrument) {
+  await ElMessageBox.confirm(
+    `硬删除证券标的“${instrumentLabel(instrument)}”？\n\n该操作会删除该证券相关的持仓、模拟订单、成交、资金流水、历史 K 线和同步日志。订单页将不再显示该证券。此操作不可恢复。`,
+    '硬删除证券标的',
+    { type: 'error', confirmButtonText: '硬删除' },
+  )
+  const deletedSelected = instrument.id === selectedInstrumentId.value
+  await forceDeleteInstrument(instrument.id)
+  ElMessage.success('证券标的及相关模拟数据已硬删除')
+  if (deletedSelected) {
+    selectedInstrumentId.value = null
+    prices.value = []
+    summary.value = null
+  }
+  await loadInstruments()
+}
+
 function parseImportInput() {
   return importText.value
     .split(/[,，;；\s]+/)
@@ -599,9 +679,16 @@ function parseImportInput() {
 }
 
 function rangeParams(key: RangeKey) {
-  if (key === 'ALL') return { limit: 10000 }
   const now = new Date()
   const from = new Date(now)
+  if (key === 'ALL') {
+    from.setFullYear(from.getFullYear() - 30)
+    return {
+      from: toDateString(from),
+      to: toDateString(now),
+      limit: 10000,
+    }
+  }
   const monthMap: Record<Exclude<RangeKey, 'ALL'>, number> = {
     '1M': 1,
     '3M': 3,
@@ -634,6 +721,24 @@ function instrumentLabel(instrument: SecurityInstrument) {
   return `${instrument.instrumentName}（${instrument.symbol}）`
 }
 
+function instrumentDisplayName(instrument: SecurityInstrument) {
+  const name = instrument.instrumentName.trim()
+  const normalizedName = name.toUpperCase()
+  const symbol = instrument.symbol.toUpperCase()
+  if (!name || normalizedName === symbol || normalizedName.startsWith(`${symbol}.`)) {
+    return instrument.symbol
+  }
+  return name
+}
+
+function instrumentSecondaryText(instrument: SecurityInstrument) {
+  const displayName = instrumentDisplayName(instrument)
+  const assetType = instrument.assetType === 'ETF' ? 'ETF' : '股票'
+  return displayName === instrument.symbol
+    ? `${assetType} · ${instrument.exchange}`
+    : `${instrument.symbol} · ${instrument.exchange}`
+}
+
 function statusLabel(status: SecurityInstrument['status']) {
   const labels: Record<SecurityInstrument['status'], string> = {
     ACTIVE: '启用',
@@ -655,6 +760,12 @@ function signed(value: string | number | null | undefined, suffix = '') {
   return `${numberValue > 0 ? '+' : ''}${numberValue.toLocaleString('zh-CN')}${suffix}`
 }
 
+function changeClass(value: string | number | null | undefined) {
+  const numberValue = Number(value)
+  if (!Number.isFinite(numberValue) || numberValue === 0) return ''
+  return numberValue > 0 ? 'change-positive' : 'change-negative'
+}
+
 function formatDateTime(value: string | null | undefined) {
   if (!value) return '暂无数据'
   const date = new Date(value)
@@ -672,8 +783,9 @@ function formatDateTime(value: string | null | undefined) {
 <style scoped>
 .market-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
 }
 
 .instrument-panel,
@@ -685,29 +797,50 @@ function formatDateTime(value: string | null | undefined) {
 .instrument-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: 10px;
+  min-height: 0;
+  padding: 14px;
 }
 
 .panel-title {
-  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
   font-weight: 700;
+}
+
+.panel-title > div {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+
+.panel-title small {
+  color: var(--qg-text-muted);
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .filter-row {
   width: 100%;
 }
 
+.instrument-scroll {
+  flex: 1;
+  min-height: 420px;
+}
+
 .instrument-item {
-  display: flex;
+  display: grid;
   width: 100%;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   border: 0;
   border-bottom: 1px solid var(--qg-border);
   background: transparent;
-  padding: 12px 4px;
+  padding: 10px 4px;
   color: var(--qg-text);
   text-align: left;
 }
@@ -753,7 +886,7 @@ function formatDateTime(value: string | null | undefined) {
 }
 
 .instrument-actions {
-  flex-wrap: wrap;
+  min-height: 24px;
   justify-content: flex-end;
 }
 
@@ -761,19 +894,16 @@ function formatDateTime(value: string | null | undefined) {
   color: var(--el-color-danger);
 }
 
-.sync-all {
-  width: 100%;
-}
-
 .market-main {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
+  padding: 0;
 }
 
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
 }
 
@@ -781,7 +911,15 @@ function formatDateTime(value: string | null | undefined) {
   min-width: 0;
   border-right: 1px solid var(--qg-border);
   border-bottom: 1px solid var(--qg-border);
-  padding: 14px 16px;
+  padding: 13px 16px;
+}
+
+.summary-grid div:nth-child(3n) {
+  border-right: 0;
+}
+
+.summary-grid div:first-child {
+  background: var(--qg-subtle);
 }
 
 .summary-grid span {
@@ -793,28 +931,70 @@ function formatDateTime(value: string | null | undefined) {
 .summary-grid strong {
   display: block;
   overflow: hidden;
-  margin-top: 8px;
+  margin-top: 6px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 15px;
+}
+
+.summary-grid small {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--qg-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-grid div:first-child strong {
+  font-size: 17px;
+}
+
+.change-positive {
+  color: #d93025;
+}
+
+.change-negative {
+  color: #188038;
 }
 
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
   flex-wrap: wrap;
-  padding: 12px 16px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--qg-border);
+  background: var(--qg-panel);
+}
+
+.range-tools {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.market-actions :deep(.el-button) {
+  min-width: 102px;
 }
 
 .chart-panel {
-  padding: 16px;
+  display: grid;
+  min-height: 0;
+  padding: 8px 10px 10px;
+  background: var(--qg-panel);
+}
+
+.chart-panel :deep(.chart) {
+  height: 460px;
+  min-height: 340px;
 }
 
 .dialog-actions {
-  display: flex;
-  gap: 12px;
   flex-wrap: wrap;
   display: flex;
   justify-content: flex-end;
@@ -831,8 +1011,22 @@ function formatDateTime(value: string | null | undefined) {
     grid-template-columns: 1fr;
   }
 
+  .instrument-scroll {
+    flex: none;
+    height: 360px;
+    min-height: 0;
+  }
+
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .summary-grid div:nth-child(3n) {
+    border-right: 1px solid var(--qg-border);
+  }
+
+  .summary-grid div:nth-child(2n) {
+    border-right: 0;
   }
 
   .toolbar {

@@ -6,7 +6,6 @@ import com.vanyiung.quantguard.dto.InvestmentPortfolioResponse;
 import com.vanyiung.quantguard.entity.CashLedger;
 import com.vanyiung.quantguard.entity.InvestmentPortfolio;
 import com.vanyiung.quantguard.entity.PortfolioPosition;
-import com.vanyiung.quantguard.entity.PortfolioRiskConfig;
 import com.vanyiung.quantguard.entity.SimulatedOrder;
 import com.vanyiung.quantguard.entity.SimulatedTrade;
 import com.vanyiung.quantguard.entity.SimulationAccount;
@@ -18,12 +17,12 @@ import com.vanyiung.quantguard.exception.ResourceNotFoundException;
 import com.vanyiung.quantguard.mapper.CashLedgerMapper;
 import com.vanyiung.quantguard.mapper.InvestmentPortfolioMapper;
 import com.vanyiung.quantguard.mapper.PortfolioPositionMapper;
-import com.vanyiung.quantguard.mapper.PortfolioRiskConfigMapper;
 import com.vanyiung.quantguard.mapper.SimulatedOrderMapper;
 import com.vanyiung.quantguard.mapper.SimulatedTradeMapper;
 import com.vanyiung.quantguard.mapper.SimulationAccountMapper;
 import com.vanyiung.quantguard.service.InvestmentPortfolioService;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,25 +36,25 @@ public class InvestmentPortfolioServiceImpl implements InvestmentPortfolioServic
     private final InvestmentPortfolioMapper investmentPortfolioMapper;
     private final SimulationAccountMapper simulationAccountMapper;
     private final PortfolioPositionMapper portfolioPositionMapper;
-    private final PortfolioRiskConfigMapper portfolioRiskConfigMapper;
     private final SimulatedOrderMapper simulatedOrderMapper;
     private final SimulatedTradeMapper simulatedTradeMapper;
     private final CashLedgerMapper cashLedgerMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     public InvestmentPortfolioServiceImpl(InvestmentPortfolioMapper investmentPortfolioMapper,
                                           SimulationAccountMapper simulationAccountMapper,
                                           PortfolioPositionMapper portfolioPositionMapper,
-                                          PortfolioRiskConfigMapper portfolioRiskConfigMapper,
                                           SimulatedOrderMapper simulatedOrderMapper,
                                           SimulatedTradeMapper simulatedTradeMapper,
-                                          CashLedgerMapper cashLedgerMapper) {
+                                          CashLedgerMapper cashLedgerMapper,
+                                          JdbcTemplate jdbcTemplate) {
         this.investmentPortfolioMapper = investmentPortfolioMapper;
         this.simulationAccountMapper = simulationAccountMapper;
         this.portfolioPositionMapper = portfolioPositionMapper;
-        this.portfolioRiskConfigMapper = portfolioRiskConfigMapper;
         this.simulatedOrderMapper = simulatedOrderMapper;
         this.simulatedTradeMapper = simulatedTradeMapper;
         this.cashLedgerMapper = cashLedgerMapper;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
@@ -163,6 +162,17 @@ public class InvestmentPortfolioServiceImpl implements InvestmentPortfolioServic
         }
     }
 
+    @Override
+    @Transactional
+    public void forceDelete(Long id) {
+        requirePortfolio(id);
+        deletePortfolioSimulationData(id);
+        int deletedRows = investmentPortfolioMapper.deleteById(id);
+        if (deletedRows != 1) {
+            throw new BusinessRuleException("Investment portfolio deletion failed, please retry");
+        }
+    }
+
     private InvestmentPortfolio requirePortfolio(Long id) {
         InvestmentPortfolio portfolio = investmentPortfolioMapper.selectById(id);
         if (portfolio == null) {
@@ -187,8 +197,6 @@ public class InvestmentPortfolioServiceImpl implements InvestmentPortfolioServic
     private void ensurePortfolioCanBeDeleted(Long portfolioId) {
         boolean hasRelatedData = portfolioPositionMapper.exists(Wrappers.<PortfolioPosition>lambdaQuery()
                 .eq(PortfolioPosition::getPortfolioId, portfolioId))
-                || portfolioRiskConfigMapper.exists(Wrappers.<PortfolioRiskConfig>lambdaQuery()
-                .eq(PortfolioRiskConfig::getPortfolioId, portfolioId))
                 || simulatedOrderMapper.exists(Wrappers.<SimulatedOrder>lambdaQuery()
                 .eq(SimulatedOrder::getPortfolioId, portfolioId))
                 || simulatedTradeMapper.exists(Wrappers.<SimulatedTrade>lambdaQuery()
@@ -199,5 +207,22 @@ public class InvestmentPortfolioServiceImpl implements InvestmentPortfolioServic
             throw new BusinessRuleException(
                     "Investment portfolio has related business data and cannot be deleted. Disable it instead.");
         }
+        deleteLegacyRiskConfig(portfolioId);
+    }
+
+    private void deletePortfolioSimulationData(Long portfolioId) {
+        cashLedgerMapper.delete(Wrappers.<CashLedger>lambdaQuery()
+                .eq(CashLedger::getPortfolioId, portfolioId));
+        simulatedTradeMapper.delete(Wrappers.<SimulatedTrade>lambdaQuery()
+                .eq(SimulatedTrade::getPortfolioId, portfolioId));
+        simulatedOrderMapper.delete(Wrappers.<SimulatedOrder>lambdaQuery()
+                .eq(SimulatedOrder::getPortfolioId, portfolioId));
+        portfolioPositionMapper.delete(Wrappers.<PortfolioPosition>lambdaQuery()
+                .eq(PortfolioPosition::getPortfolioId, portfolioId));
+        deleteLegacyRiskConfig(portfolioId);
+    }
+
+    private void deleteLegacyRiskConfig(Long portfolioId) {
+        jdbcTemplate.update("DELETE FROM portfolio_risk_config WHERE portfolio_id = ?", portfolioId);
     }
 }

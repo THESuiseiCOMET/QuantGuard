@@ -17,4 +17,6 @@ public interface SecurityInstrumentService {
     SecurityInstrumentResponse updateStatus(Long id, InstrumentStatus status);
 
     void delete(Long id);
+
+    void forceDelete(Long id);
 }

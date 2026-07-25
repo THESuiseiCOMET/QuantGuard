@@ -9,3 +9,9 @@ export interface PortfolioPosition {
   createdAt: string
   updatedAt: string
 }
+
+export interface UpdatePortfolioPositionRequest {
+  totalQuantity: string
+  availableQuantity: string
+  averageCost: string
+}

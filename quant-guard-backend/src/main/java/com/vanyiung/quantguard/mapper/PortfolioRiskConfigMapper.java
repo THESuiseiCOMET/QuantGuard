@@ -1,7 +1,0 @@
-package com.vanyiung.quantguard.mapper;
-
-import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.vanyiung.quantguard.entity.PortfolioRiskConfig;
-
-public interface PortfolioRiskConfigMapper extends BaseMapper<PortfolioRiskConfig> {
-}

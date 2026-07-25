@@ -24,3 +24,7 @@ export function updateAccountStatus(id: number, status: AccountStatus) {
 export function deleteAccount(id: number) {
   return http.delete(`/accounts/${id}`) as Promise<null>
 }
+
+export function forceDeleteAccount(id: number) {
+  return http.delete(`/accounts/${id}/force`) as Promise<null>
+}

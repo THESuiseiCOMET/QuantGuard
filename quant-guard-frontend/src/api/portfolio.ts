@@ -21,3 +21,7 @@ export function updatePortfolioStatus(id: number, status: AccountStatus) {
 export function deletePortfolio(id: number) {
   return http.delete(`/portfolios/${id}`) as Promise<null>
 }
+
+export function forceDeletePortfolio(id: number) {
+  return http.delete(`/portfolios/${id}/force`) as Promise<null>
+}

@@ -17,4 +17,6 @@ public interface SimulationAccountService {
     SimulationAccountResponse updateStatus(Long id, AccountStatus status);
 
     void delete(Long id);
+
+    void forceDelete(Long id);
 }

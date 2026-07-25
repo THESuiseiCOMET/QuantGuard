@@ -106,21 +106,13 @@ public class MarketDataServiceImpl implements MarketDataService {
             MarketSymbol symbol = item.symbol();
             ProviderInstrumentMetadata metadata = metadataByCode.get(symbol.canonicalCode());
             SecurityInstrument existing = findExisting(symbol);
-            if (metadata == null) {
-                items.add(new InstrumentImportPreviewItem(
-                        item.originalInput(), symbol.canonicalCode(), symbol.symbol(), symbol.exchange(),
-                        null, "CNY", AssetType.STOCK, lotSizeFor(symbol), null, null,
-                        existing != null, existing == null ? null : existing.getId(), false,
-                        providerErrorMessage == null
-                                ? "No instrument metadata returned by market data provider"
-                                : providerErrorMessage));
-            } else {
-                items.add(new InstrumentImportPreviewItem(
-                        item.originalInput(), symbol.canonicalCode(), symbol.symbol(), symbol.exchange(),
-                        metadata.instrumentName(), "CNY", AssetType.STOCK, lotSizeFor(symbol),
-                        metadata.listStatus(), metadata.listDate(), existing != null,
-                        existing == null ? null : existing.getId(), true, "OK"));
-            }
+            ProviderInstrumentMetadata effectiveMetadata = metadataOrFallback(symbol, metadata);
+            items.add(new InstrumentImportPreviewItem(
+                    item.originalInput(), symbol.canonicalCode(), symbol.symbol(), symbol.exchange(),
+                    effectiveMetadata.instrumentName(), "CNY", AssetType.STOCK, lotSizeFor(symbol),
+                    effectiveMetadata.listStatus(), effectiveMetadata.listDate(), existing != null,
+                    existing == null ? null : existing.getId(), true,
+                    metadata == null ? metadataFallbackMessage(providerErrorMessage) : "OK"));
         }
         return items;
     }
@@ -147,12 +139,15 @@ public class MarketDataServiceImpl implements MarketDataService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public InstrumentImportResult importOne(MarketSymbol symbol, boolean syncDailyPrices, LocalDate requestedStartDate) {
-        ProviderInstrumentMetadata metadata = lookupMetadata(List.of(symbol)).get(symbol.canonicalCode());
-        if (metadata == null) {
-            return new InstrumentImportResult(symbol.canonicalCode(), null, null, "FAILED",
-                    "FAILED", "SKIPPED", 0, 0, null,
-                    "No instrument metadata returned by market data provider");
+        ProviderInstrumentMetadata metadata = null;
+        String providerErrorMessage = null;
+        try {
+            metadata = lookupMetadata(List.of(symbol)).get(symbol.canonicalCode());
+        } catch (MarketDataProviderException ex) {
+            providerErrorMessage = ex.getMessage();
         }
+        boolean metadataFallback = metadata == null;
+        metadata = metadataOrFallback(symbol, metadata);
 
         SecurityInstrument existing = findExisting(symbol);
         LocalDateTime now = LocalDateTime.now(CHINA_ZONE);
@@ -191,11 +186,11 @@ public class MarketDataServiceImpl implements MarketDataService {
         }
 
         return new InstrumentImportResult(symbol.canonicalCode(), instrument.getId(), instrument.getInstrumentName(),
-                action, "SUCCESS", syncResult == null ? "SKIPPED" : syncResult.status(),
+                action, metadataFallback ? "FALLBACK" : "SUCCESS", syncResult == null ? "SKIPPED" : syncResult.status(),
                 syncResult == null ? 0 : syncResult.recordsInserted(),
                 syncResult == null ? 0 : syncResult.recordsUpdated(),
                 syncResult == null ? latestTradeDate(instrument.getId()) : syncResult.latestTradeDate(),
-                "OK");
+                metadataFallback ? metadataFallbackMessage(providerErrorMessage) : "OK");
     }
 
     @Override
@@ -304,6 +299,21 @@ public class MarketDataServiceImpl implements MarketDataService {
         return marketDataProvider.lookupInstruments(symbols).stream()
                 .collect(Collectors.toMap(item -> item.marketSymbol().canonicalCode(), Function.identity(),
                         (first, second) -> first, LinkedHashMap::new));
+    }
+
+    private ProviderInstrumentMetadata metadataOrFallback(MarketSymbol symbol, ProviderInstrumentMetadata metadata) {
+        if (metadata != null) {
+            return metadata;
+        }
+        return new ProviderInstrumentMetadata(symbol, symbol.canonicalCode(), symbol.exchange(), "CNY", "L", null);
+    }
+
+    private String metadataFallbackMessage(String providerErrorMessage) {
+        if (providerErrorMessage == null || providerErrorMessage.isBlank()) {
+            return "Instrument metadata unavailable; using canonical code as instrument name";
+        }
+        return "Instrument metadata unavailable; using canonical code as instrument name. Provider message: "
+                + providerErrorMessage;
     }
 
     private SecurityInstrument findExisting(MarketSymbol symbol) {

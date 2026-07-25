@@ -278,23 +278,27 @@ function formatPercent(value: number) {
 <style scoped>
 .calculator-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .calculator-panel,
 .result-panel {
+  display: flex;
+  height: 100%;
   min-width: 0;
   padding: 20px;
+  flex-direction: column;
 }
 
 .panel-header {
   display: flex;
+  min-height: 32px;
   gap: 12px;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .panel-header h2 {
@@ -328,6 +332,7 @@ function formatPercent(value: number) {
 .input-grid :deep(.el-input-number),
 .plan-grid :deep(.el-input-number) {
   width: 100%;
+  height: 34px;
 }
 
 .position-status {
@@ -375,7 +380,9 @@ function formatPercent(value: number) {
 
 .result-grid {
   display: grid;
+  flex: 1;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(82px, 1fr);
   overflow: hidden;
   border: 1px solid var(--qg-border);
   border-radius: 8px;
@@ -384,8 +391,9 @@ function formatPercent(value: number) {
 .result-grid div {
   display: grid;
   gap: 6px;
+  align-content: center;
   min-width: 0;
-  padding: 16px;
+  padding: 14px 16px;
   border-right: 1px solid var(--qg-border);
   border-bottom: 1px solid var(--qg-border);
 }
@@ -402,7 +410,8 @@ function formatPercent(value: number) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 20px;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
 }
 
 .calculation-error {
@@ -420,9 +429,13 @@ function formatPercent(value: number) {
   margin-top: 12px;
 }
 
-@media (max-width: 980px) {
+@media (max-width: 1060px) {
   .calculator-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .result-grid {
+    grid-auto-rows: minmax(76px, auto);
   }
 }
 

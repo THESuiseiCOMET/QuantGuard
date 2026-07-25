@@ -81,9 +81,9 @@ import {
   Setting,
   Sunny,
   Tickets,
-  TrendCharts,
   User,
 } from '@element-plus/icons-vue'
+import { Calculator } from '@lucide/vue'
 
 const route = useRoute()
 const sidebarCollapsed = ref(false)
@@ -126,7 +126,7 @@ const navItems = [
   { path: '/accounts', label: '模拟账户', icon: User },
   { path: '/market-data', label: '行情中心', icon: DataAnalysis },
   { path: '/orders', label: '模拟订单', icon: Tickets },
-  { path: '/recovery-calculator', label: '回本计算', icon: TrendCharts },
+  { path: '/recovery-calculator', label: '回本计算', icon: Calculator },
   { path: '/settings', label: '设置', icon: Setting },
 ]
 

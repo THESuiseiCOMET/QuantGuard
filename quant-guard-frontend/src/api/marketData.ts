@@ -41,3 +41,7 @@ export function listInstrumentDailyPrices(
 export function getInstrumentDailyPriceSummary(instrumentId: number) {
   return http.get(`/instruments/${instrumentId}/daily-prices/summary`) as Promise<DailyPriceSummary>
 }
+
+export function clearInstrumentDailyPrices(instrumentId: number) {
+  return http.delete(`/instruments/${instrumentId}/daily-prices`) as Promise<null>
+}

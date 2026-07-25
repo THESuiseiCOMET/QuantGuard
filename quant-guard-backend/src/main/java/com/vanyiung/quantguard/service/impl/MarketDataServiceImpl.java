@@ -292,6 +292,19 @@ public class MarketDataServiceImpl implements MarketDataService {
                 lastSyncAt(instrumentId), latest.getDataSource());
     }
 
+    @Override
+    @Transactional
+    public void clearDailyPrices(Long instrumentId) {
+        requireInstrument(instrumentId);
+        if (hasRunningSync(instrumentId)) {
+            throw new BusinessRuleException("Security instrument has a running market data sync task");
+        }
+        dailyPriceMapper.delete(Wrappers.<InstrumentDailyPrice>lambdaQuery()
+                .eq(InstrumentDailyPrice::getInstrumentId, instrumentId));
+        syncLogMapper.delete(Wrappers.<MarketDataSyncLog>lambdaQuery()
+                .eq(MarketDataSyncLog::getInstrumentId, instrumentId));
+    }
+
     private Map<String, ProviderInstrumentMetadata> lookupMetadata(List<MarketSymbol> symbols) {
         if (symbols.isEmpty()) {
             return Map.of();
@@ -350,6 +363,12 @@ public class MarketDataServiceImpl implements MarketDataService {
         return instrument.getStatus() == InstrumentStatus.ACTIVE
                 && instrument.getAssetType() == AssetType.STOCK
                 && (instrument.getExchange() == Exchange.SSE || instrument.getExchange() == Exchange.SZSE);
+    }
+
+    private boolean hasRunningSync(Long instrumentId) {
+        return syncLogMapper.exists(Wrappers.<MarketDataSyncLog>lambdaQuery()
+                .eq(MarketDataSyncLog::getInstrumentId, instrumentId)
+                .eq(MarketDataSyncLog::getStatus, MarketDataSyncStatus.RUNNING));
     }
 
     private LocalDate resolveSyncStartDate(Long instrumentId, DailyPriceSyncRequest request, LocalDate endDate) {

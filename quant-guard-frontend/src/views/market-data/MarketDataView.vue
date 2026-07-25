@@ -36,20 +36,61 @@
         />
 
         <el-scrollbar height="560px">
-          <button
+          <div
             v-for="instrument in filteredInstruments"
             :key="instrument.id"
             class="instrument-item"
             :class="{ active: instrument.id === selectedInstrumentId }"
-            type="button"
-            @click="selectInstrument(instrument.id)"
           >
-            <span>
-              <strong>{{ instrument.symbol }}</strong>
-              <small>{{ instrument.instrumentName }}</small>
-            </span>
-            <el-tag size="small" effect="plain">{{ instrument.exchange }}</el-tag>
-          </button>
+            <button
+              class="instrument-select"
+              type="button"
+              @click="selectInstrument(instrument.id)"
+            >
+              <span>
+                <strong>{{ instrument.symbol }}</strong>
+                <small>{{ instrument.instrumentName }}</small>
+              </span>
+              <span class="instrument-tags">
+                <el-tag size="small" effect="plain">{{ instrument.exchange }}</el-tag>
+                <el-tag
+                  size="small"
+                  :type="instrument.status === 'ACTIVE' ? 'success' : 'info'"
+                  effect="plain"
+                >
+                  {{ statusLabel(instrument.status) }}
+                </el-tag>
+              </span>
+            </button>
+            <div class="instrument-actions">
+              <el-button size="small" link @click="selectInstrument(instrument.id)">查看</el-button>
+              <el-button
+                size="small"
+                link
+                type="primary"
+                :disabled="instrument.status !== 'ACTIVE'"
+                :loading="syncingInstrumentId === instrument.id"
+                title="停用证券需先恢复后才能同步行情"
+                @click="syncInstrument(instrument)"
+              >
+                同步
+              </el-button>
+              <el-dropdown trigger="click" @command="handleInstrumentCommand(instrument, $event)">
+                <el-button size="small" link>更多</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="toggle-status">
+                      {{ instrument.status === 'ACTIVE' ? '停用' : '恢复' }}
+                    </el-dropdown-item>
+                    <el-dropdown-item command="clear-prices">清空历史行情</el-dropdown-item>
+                    <el-dropdown-item command="delete" divided class="danger-menu-item">
+                      永久删除
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </div>
         </el-scrollbar>
 
         <el-button
@@ -118,8 +159,9 @@
             </el-button>
             <el-button
               type="primary"
-              :disabled="!selectedInstrumentId"
+              :disabled="!selectedInstrumentId || selectedInstrument?.status !== 'ACTIVE'"
               :loading="syncing"
+              title="停用证券需先恢复后才能同步行情"
               @click="syncCurrent"
             >
               同步当前证券
@@ -138,7 +180,7 @@
           <el-empty v-if="!selectedInstrumentId" description="请选择一只证券查看 K 线" />
           <el-empty
             v-else-if="!priceLoading && prices.length === 0"
-            description="当前证券暂无历史日线，请先同步行情。"
+            description="当前证券暂无历史日线，请重新同步行情。"
           />
           <CandlestickChart v-else v-loading="priceLoading" :prices="prices" />
         </div>
@@ -241,10 +283,11 @@
 <script setup lang="ts">
 /* global window */
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/common/PageHeader.vue'
-import { listInstruments } from '@/api/instrument'
+import { deleteInstrument, listInstruments, updateInstrumentStatus } from '@/api/instrument'
 import {
+  clearInstrumentDailyPrices,
   getInstrumentDailyPriceSummary,
   importInstruments,
   listInstrumentDailyPrices,
@@ -272,6 +315,7 @@ const summary = ref<DailyPriceSummary | null>(null)
 const loading = ref(false)
 const priceLoading = ref(false)
 const syncing = ref(false)
+const syncingInstrumentId = ref<number | null>(null)
 const batchSyncing = ref(false)
 const previewing = ref(false)
 const importing = ref(false)
@@ -426,11 +470,20 @@ async function confirmImport() {
 }
 
 async function syncCurrent() {
-  if (!selectedInstrumentId.value) return
+  if (!selectedInstrument.value) return
+  await syncInstrument(selectedInstrument.value)
+}
+
+async function syncInstrument(instrument: SecurityInstrument) {
+  if (instrument.status !== 'ACTIVE') {
+    ElMessage.warning('停用证券需先恢复后才能同步行情')
+    return
+  }
   syncing.value = true
+  syncingInstrumentId.value = instrument.id
 
   try {
-    const result = await syncInstrumentDailyPrices(selectedInstrumentId.value, {
+    const result = await syncInstrumentDailyPrices(instrument.id, {
       startDate: null,
       endDate: null,
       fullRefresh: false,
@@ -440,9 +493,12 @@ async function syncCurrent() {
     } else {
       ElMessage.warning(result.message)
     }
-    await loadPrices()
+    if (instrument.id === selectedInstrumentId.value) {
+      await loadPrices()
+    }
   } finally {
     syncing.value = false
+    syncingInstrumentId.value = null
   }
 }
 
@@ -474,6 +530,65 @@ function reconcileSelectedInstrument() {
     return
   }
   selectedInstrumentId.value = filteredInstruments.value[0]?.id ?? null
+}
+
+async function handleInstrumentCommand(instrument: SecurityInstrument, command: unknown) {
+  if (command === 'toggle-status') {
+    await toggleInstrumentStatus(instrument)
+    return
+  }
+  if (command === 'clear-prices') {
+    await clearDailyPrices(instrument)
+    return
+  }
+  if (command === 'delete') {
+    await removeInstrument(instrument)
+  }
+}
+
+async function toggleInstrumentStatus(instrument: SecurityInstrument) {
+  const nextStatus = instrument.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE'
+  const actionText = nextStatus === 'DISABLED' ? '停用' : '恢复'
+  await ElMessageBox.confirm(
+    `${actionText}“${instrumentLabel(instrument)}”？\n\n停用后仍可查看历史 K 线和已有交易映射，但不能创建新订单，也不会参与行情同步。`,
+    `${actionText}证券标的`,
+    { type: nextStatus === 'DISABLED' ? 'warning' : 'info', confirmButtonText: actionText },
+  )
+  await updateInstrumentStatus(instrument.id, nextStatus)
+  ElMessage.success(`${actionText}成功`)
+  await loadInstruments()
+}
+
+async function clearDailyPrices(instrument: SecurityInstrument) {
+  await ElMessageBox.confirm(
+    `清空“${instrumentLabel(instrument)}”的全部历史日线数据？\n\n该操作会删除本地 K 线和成交量数据，但不会删除证券标的、持仓、订单、成交和资金流水。清空后可以重新同步。`,
+    '清空历史行情',
+    { type: 'warning', confirmButtonText: '清空' },
+  )
+  await clearInstrumentDailyPrices(instrument.id)
+  ElMessage.success('历史日线已清空，可重新同步行情')
+  if (instrument.id === selectedInstrumentId.value) {
+    prices.value = []
+    summary.value = null
+    await loadPrices()
+  }
+}
+
+async function removeInstrument(instrument: SecurityInstrument) {
+  await ElMessageBox.confirm(
+    `永久删除完全未使用的证券标的“${instrumentLabel(instrument)}”？\n\n已有持仓、订单、成交或资金流水时，服务端会拒绝删除。该操作不可恢复。`,
+    '永久删除证券标的',
+    { type: 'error', confirmButtonText: '永久删除' },
+  )
+  const deletedSelected = instrument.id === selectedInstrumentId.value
+  await deleteInstrument(instrument.id)
+  ElMessage.success('证券标的已删除')
+  if (deletedSelected) {
+    selectedInstrumentId.value = null
+    prices.value = []
+    summary.value = null
+  }
+  await loadInstruments()
 }
 
 function parseImportInput() {
@@ -513,6 +628,18 @@ function restoreSelectedInstrument() {
   const raw = window.localStorage.getItem(storageKey)
   const id = raw ? Number(raw) : NaN
   return Number.isInteger(id) && id > 0 ? id : null
+}
+
+function instrumentLabel(instrument: SecurityInstrument) {
+  return `${instrument.instrumentName}（${instrument.symbol}）`
+}
+
+function statusLabel(status: SecurityInstrument['status']) {
+  const labels: Record<SecurityInstrument['status'], string> = {
+    ACTIVE: '启用',
+    DISABLED: '停用',
+  }
+  return labels[status]
 }
 
 function formatDecimal(value: string | number | null | undefined) {
@@ -582,7 +709,6 @@ function formatDateTime(value: string | null | undefined) {
   background: transparent;
   padding: 12px 4px;
   color: var(--qg-text);
-  cursor: pointer;
   text-align: left;
 }
 
@@ -591,17 +717,48 @@ function formatDateTime(value: string | null | undefined) {
   font-weight: 700;
 }
 
-.instrument-item span {
+.instrument-select {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.instrument-select span {
   min-width: 0;
 }
 
-.instrument-item small {
+.instrument-select small {
   display: block;
   overflow: hidden;
   color: var(--qg-text-muted);
   font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.instrument-tags,
+.instrument-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.instrument-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.danger-menu-item {
+  color: var(--el-color-danger);
 }
 
 .sync-all {

@@ -11,14 +11,17 @@ import com.vanyiung.quantguard.dto.InstrumentImportPreviewItem;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewRequest;
 import com.vanyiung.quantguard.dto.InstrumentImportResult;
 import com.vanyiung.quantguard.dto.SecurityInstrumentResponse;
+import com.vanyiung.quantguard.dto.UpdateInstrumentStatusRequest;
 import com.vanyiung.quantguard.service.MarketDataService;
 import com.vanyiung.quantguard.service.SecurityInstrumentService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -59,6 +62,19 @@ public class SecurityInstrumentController {
         return ApiResponse.success(securityInstrumentService.getById(id));
     }
 
+    @PatchMapping("/{id}/status")
+    public ApiResponse<SecurityInstrumentResponse> updateStatus(
+            @PathVariable @Positive(message = "id must be positive") Long id,
+            @Valid @RequestBody UpdateInstrumentStatusRequest request) {
+        return ApiResponse.success(securityInstrumentService.updateStatus(id, request.status()));
+    }
+
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> delete(@PathVariable @Positive(message = "id must be positive") Long id) {
+        securityInstrumentService.delete(id);
+        return ApiResponse.success(null);
+    }
+
     @PostMapping("/import/preview")
     public ApiResponse<List<InstrumentImportPreviewItem>> previewImport(
             @Valid @RequestBody InstrumentImportPreviewRequest request) {
@@ -86,6 +102,12 @@ public class SecurityInstrumentController {
             @RequestParam(required = false) LocalDate to,
             @RequestParam(required = false) Integer limit) {
         return ApiResponse.success(marketDataService.listDailyPrices(id, from, to, limit));
+    }
+
+    @DeleteMapping("/{id}/daily-prices")
+    public ApiResponse<Void> clearDailyPrices(@PathVariable @Positive(message = "id must be positive") Long id) {
+        marketDataService.clearDailyPrices(id);
+        return ApiResponse.success(null);
     }
 
     @GetMapping("/{id}/daily-prices/summary")

@@ -27,4 +27,6 @@ public interface MarketDataService {
     List<DailyPriceResponse> listDailyPrices(Long instrumentId, LocalDate from, LocalDate to, Integer limit);
 
     DailyPriceSummaryResponse getDailyPriceSummary(Long instrumentId);
+
+    void clearDailyPrices(Long instrumentId);
 }

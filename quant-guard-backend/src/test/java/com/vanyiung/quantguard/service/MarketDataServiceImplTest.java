@@ -1,13 +1,16 @@
 package com.vanyiung.quantguard.service;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.vanyiung.quantguard.dto.DailyPriceSummaryResponse;
 import com.vanyiung.quantguard.dto.ImportInstrumentsRequest;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewItem;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewRequest;
 import com.vanyiung.quantguard.dto.InstrumentImportResult;
 import com.vanyiung.quantguard.entity.SecurityInstrument;
+import com.vanyiung.quantguard.enums.AssetType;
 import com.vanyiung.quantguard.enums.Exchange;
 import com.vanyiung.quantguard.enums.InstrumentStatus;
+import com.vanyiung.quantguard.exception.BusinessRuleException;
 import com.vanyiung.quantguard.mapper.InstrumentDailyPriceMapper;
 import com.vanyiung.quantguard.mapper.MarketDataSyncLogMapper;
 import com.vanyiung.quantguard.mapper.SecurityInstrumentMapper;
@@ -28,8 +31,11 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -104,6 +110,67 @@ class MarketDataServiceImplTest {
         assertEquals(Exchange.SSE, instrument.getExchange());
         assertEquals("600519.SH", instrument.getInstrumentName());
         assertEquals(InstrumentStatus.ACTIVE, instrument.getStatus());
+    }
+
+    @Test
+    void clearDailyPricesSucceedsAndDoesNotDeleteInstrument() {
+        when(securityInstrumentMapper.selectById(1L)).thenReturn(activeInstrument());
+        when(syncLogMapper.exists(any())).thenReturn(false);
+
+        marketDataService.clearDailyPrices(1L);
+
+        verify(dailyPriceMapper).delete(any());
+        verify(syncLogMapper).delete(any());
+        verify(securityInstrumentMapper, never()).deleteById(1L);
+    }
+
+    @Test
+    void clearDailyPricesCanRunRepeatedlyWithoutError() {
+        when(securityInstrumentMapper.selectById(1L)).thenReturn(activeInstrument());
+        when(syncLogMapper.exists(any())).thenReturn(false);
+        when(dailyPriceMapper.delete(any())).thenReturn(0);
+        when(syncLogMapper.delete(any())).thenReturn(0);
+
+        marketDataService.clearDailyPrices(1L);
+
+        verify(dailyPriceMapper).delete(any());
+        verify(syncLogMapper).delete(any());
+    }
+
+    @Test
+    void clearDailyPricesRejectsRunningSync() {
+        when(securityInstrumentMapper.selectById(1L)).thenReturn(activeInstrument());
+        when(syncLogMapper.exists(any())).thenReturn(true);
+
+        assertThrows(BusinessRuleException.class, () -> marketDataService.clearDailyPrices(1L));
+
+        verify(dailyPriceMapper, never()).delete(any());
+    }
+
+    @Test
+    void clearDailyPricesLeavesSummaryEmpty() {
+        when(securityInstrumentMapper.selectById(1L)).thenReturn(activeInstrument());
+        when(dailyPriceMapper.selectList(any())).thenReturn(List.of());
+        when(syncLogMapper.selectOne(any())).thenReturn(null);
+        when(marketDataProvider.providerName()).thenReturn("Tushare");
+
+        DailyPriceSummaryResponse summary = marketDataService.getDailyPriceSummary(1L);
+
+        assertEquals(0, summary.recordCount());
+        assertNull(summary.latestTradeDate());
+        assertNull(summary.latestClose());
+    }
+
+    private SecurityInstrument activeInstrument() {
+        SecurityInstrument instrument = new SecurityInstrument();
+        instrument.setId(1L);
+        instrument.setSymbol("600519");
+        instrument.setExchange(Exchange.SSE);
+        instrument.setInstrumentName("Kweichow Moutai");
+        instrument.setAssetType(AssetType.STOCK);
+        instrument.setCurrency("CNY");
+        instrument.setStatus(InstrumentStatus.ACTIVE);
+        return instrument;
     }
 
     private MarketDataProviderException permissionDenied() {

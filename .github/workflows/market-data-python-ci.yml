@@ -1,0 +1,52 @@
+name: QuantGuard Market Data Python CI
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+    paths:
+      - "quant-guard-market-data-python/**"
+      - ".github/workflows/market-data-python-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "quant-guard-market-data-python/**"
+      - ".github/workflows/market-data-python-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: market-data-python-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: quant-guard-market-data-python
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: quant-guard-market-data-python/requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run offline tests
+        run: python -m pytest
+
+      - name: Compile application modules
+        run: python -m compileall app

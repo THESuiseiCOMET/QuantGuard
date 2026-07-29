@@ -7,6 +7,7 @@ import com.vanyiung.quantguard.dto.DailyPriceSummaryResponse;
 import com.vanyiung.quantguard.dto.DailyPriceSyncRequest;
 import com.vanyiung.quantguard.dto.DailyPriceSyncResult;
 import com.vanyiung.quantguard.dto.ImportInstrumentsRequest;
+import com.vanyiung.quantguard.dto.InstrumentCatalogItem;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewItem;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewRequest;
 import com.vanyiung.quantguard.dto.InstrumentImportResult;
@@ -79,6 +80,13 @@ public class SecurityInstrumentController {
     public ApiResponse<Void> forceDelete(@PathVariable @Positive(message = "id must be positive") Long id) {
         securityInstrumentService.forceDelete(id);
         return ApiResponse.success(null);
+    }
+
+    @GetMapping("/catalog/search")
+    public ApiResponse<List<InstrumentCatalogItem>> searchCatalog(
+            @RequestParam String query,
+            @RequestParam(required = false) Integer limit) {
+        return ApiResponse.success(marketDataService.searchInstrumentCatalog(query, limit));
     }
 
     @PostMapping("/import/preview")

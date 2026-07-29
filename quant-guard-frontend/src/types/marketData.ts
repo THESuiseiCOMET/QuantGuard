@@ -4,6 +4,19 @@ export interface InstrumentImportPreviewRequest {
   codes: string[]
 }
 
+export interface InstrumentCatalogItem {
+  canonicalCode: string
+  symbol: string
+  instrumentName: string
+  exchange: Exchange
+  assetType: AssetType
+  currency: string
+  listStatus: string
+  listDate: string | null
+  alreadyExists: boolean
+  existingInstrumentId: number | null
+}
+
 export interface ImportInstrumentsRequest {
   codes: string[]
   syncDailyPrices: boolean

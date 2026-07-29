@@ -21,24 +21,30 @@
     <div class="surface performance-summary">
       <div class="performance-item primary">
         <span>当前收益金额</span>
-        <strong :class="profitClass(totalProfitAmount)"
+        <strong :class="summaryValueClass(totalProfitAmount, true)"
           ><MoneyText :value="totalProfitAmount"
         /></strong>
         <small>按最新日线收盘价估算</small>
       </div>
       <div class="performance-item primary">
         <span>当前收益率</span>
-        <strong :class="profitClass(totalProfitRate)">{{ formatPercent(totalProfitRate) }}</strong>
+        <strong :class="summaryValueClass(totalProfitRate, true)">{{
+          formatPercent(totalProfitRate)
+        }}</strong>
         <small>收益金额 / 持仓成本</small>
       </div>
       <div class="performance-item">
         <span>持仓市值</span>
-        <strong><MoneyText :value="totalMarketValue" /></strong>
+        <strong :class="summaryValueClass(totalMarketValue)"
+          ><MoneyText :value="totalMarketValue"
+        /></strong>
         <small>当前价 × 总数量</small>
       </div>
       <div class="performance-item">
         <span>持仓成本</span>
-        <strong><MoneyText :value="totalCostValue" /></strong>
+        <strong :class="summaryValueClass(totalCostValue)"
+          ><MoneyText :value="totalCostValue"
+        /></strong>
         <small>平均成本 × 总数量</small>
       </div>
     </div>
@@ -99,7 +105,9 @@
               :value="profitAmount(position)"
             /><span v-else>暂无行情</span></strong
           >
-          <span>{{ formatPercent(profitRate(position)) }}</span>
+          <span :class="positionRateClass(profitRate(position))">{{
+            formatPercent(profitRate(position))
+          }}</span>
         </div>
         <div class="position-card-metrics">
           <div v-for="metric in positionMetrics(position)" :key="metric.label">
@@ -192,9 +200,11 @@ const totalCostValue = computed<number>(() =>
 const totalMarketValue = computed<number>(() =>
   sumNumbers(positions.value.map((position) => positionValue(position, 'market'))),
 )
-const totalProfitAmount = computed<number>(() => totalMarketValue.value - totalCostValue.value)
-const totalProfitRate = computed(() =>
-  totalCostValue.value > 0 ? totalProfitAmount.value / totalCostValue.value : null,
+const totalProfitAmount = computed<number>(() =>
+  sumNumbers(positions.value.map((position) => profitAmount(position))),
+)
+const totalProfitRate = computed<number>(() =>
+  totalCostValue.value > 0 ? totalProfitAmount.value / totalCostValue.value : 0,
 )
 
 const calculatorCurrentPrice = computed(() => {
@@ -410,7 +420,7 @@ function hasPositionQuantity(position: PortfolioPosition) {
 }
 
 function formatPercent(value: number | null) {
-  if (value === null || !Number.isFinite(value)) return '暂无行情'
+  if (value === null || !Number.isFinite(value)) return '0.00%'
   return new Intl.NumberFormat('zh-CN', {
     style: 'percent',
     minimumFractionDigits: 2,
@@ -418,8 +428,19 @@ function formatPercent(value: number | null) {
   }).format(value)
 }
 
+function positionRateClass(value: number | null) {
+  if (value === null || !Number.isFinite(value) || value === 0) return 'summary-neutral'
+  return value > 0 ? 'profit-positive' : 'profit-negative'
+}
+
 function profitClass(value: number | null) {
   if (value === null || value === 0) return 'muted'
+  return value > 0 ? 'profit-positive' : 'profit-negative'
+}
+
+function summaryValueClass(value: number, directional = false) {
+  if (value === 0) return 'summary-neutral'
+  if (!directional) return ''
   return value > 0 ? 'profit-positive' : 'profit-negative'
 }
 </script>
@@ -587,6 +608,10 @@ function profitClass(value: number | null) {
 .profit-negative {
   color: #188038;
   font-weight: 600;
+}
+
+.summary-neutral {
+  color: var(--qg-zero-value);
 }
 
 @media (max-width: 1200px) {

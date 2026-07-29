@@ -59,6 +59,8 @@ source src/main/resources/db/migration/V4__create_risk_config_and_simulated_orde
 source src/main/resources/db/migration/V5__create_trade_and_cash_ledger_tables.sql;
 source src/main/resources/db/migration/V5_1__harden_cash_ledger.sql;
 source src/main/resources/db/migration/V6__add_historical_market_data.sql;
+source src/main/resources/db/migration/V7__allow_index_instruments.sql;
+source src/main/resources/db/migration/V8__allow_null_first_daily_price_change.sql;
 ```
 
 这些迁移脚本都包含：
@@ -70,6 +72,10 @@ USE quant_guard;
 所以在数据库已创建后，也可以直接用 MySQL Workbench 打开完整脚本并执行。
 
 `V5_1__harden_cash_ledger.sql` 是增量加固脚本：它会调整 `cash_ledger` 的合法流水类型，并新增 `(order_id, entry_type)` 唯一约束。该脚本应在 V5 后手动执行一次，不是可无限重复执行的脚本。
+
+`V7__allow_index_instruments.sql` 会把证券类型约束扩展为 `STOCK`、`ETF` 和 `INDEX`。它不会修改或删除已有证券及交易数据，可以在已有数据库上重复执行。
+
+`V8__allow_null_first_daily_price_change.sql` 允许第一条可用日线的昨收价、涨跌额和涨跌幅为空，避免用 `0` 伪造未知昨收。它不会删除或重算已有日线，可以重复执行。
 
 执行 V5.1 前，先检查是否存在重复流水：
 
@@ -107,31 +113,48 @@ src/main/resources/application-local.yaml
 
 ## 行情数据配置
 
-历史行情使用 Tushare Pro 官方 HTTP API。Token 只允许从本地环境变量或被 Git 忽略的本地配置读取，不能提交到仓库。
+V1.1 默认通过本机 Python 服务获取无 Token 历史行情：
+
+- 证券基础信息和类型：BaoStock；
+- 证券目录搜索：BaoStock 股票与 ETF 目录，加上 AKShare 新浪指数目录；
+- 普通 A 股历史日线：BaoStock；
+- ETF 历史日线：AKShare `fund_etf_hist_sina`；
+- 指数历史日线：AKShare `stock_zh_index_daily`，只读且禁止模拟下单。
+
+BaoStock 与 AKShare 的成交量统一按 `volume / 100` 转换为 `volumeLots`，成交额以人民币元保存为 `amountCny`。新浪指数接口不提供成交额，因此指数日线当前使用 `0`。第一条可用日线没有前序收盘价时，昨收、涨跌额和涨跌幅保持为空。
+
+证券目录使用六小时进程内缓存。首次加载依赖上游网络，Python 服务重启后缓存会重新建立；如果首次加载前上游不可用，目录搜索会返回明确的服务不可用或超时错误。
+
+先在 monorepo 的 `quant-guard-market-data-python` 目录启动单 worker 服务，再启动后端。Python 服务不访问 MySQL。
 
 PowerShell 示例：
 
 ```powershell
-$env:TUSHARE_TOKEN="your-local-token"
+$env:MARKET_DATA_PROVIDER="python"
+$env:PYTHON_MARKET_DATA_BASE_URL="http://127.0.0.1:8001"
 $env:MARKET_DATA_AUTO_SYNC_ENABLED="true"
 ```
 
 默认配置：
 
+- `MARKET_DATA_PROVIDER` 默认 `python`；
+- `PYTHON_MARKET_DATA_BASE_URL` 默认 `http://127.0.0.1:8001`；
+- Python 连接超时默认 3 秒，读取超时默认 30 秒；
 - `TUSHARE_BASE_URL` 默认 `https://api.tushare.pro`；
 - `TUSHARE_TOKEN` 默认空；
-- `MARKET_DATA_DEFAULT_START_DATE` 默认 `2010-01-01`；
+- `MARKET_DATA_DEFAULT_START_DATE` 默认 `1990-01-01`；
 - `MARKET_DATA_AUTO_SYNC_ENABLED` 默认 `false`；
 - `MARKET_DATA_AUTO_SYNC_CRON` 默认工作日 18:00；
 - 自动同步默认关闭。
 
-Token 缺失时，后端仍可正常启动。只有调用导入或同步行情接口时才会返回明确错误：
+需要保留 Tushare 时可切换：
 
-```text
-Market data provider is not configured. Please set TUSHARE_TOKEN.
+```powershell
+$env:MARKET_DATA_PROVIDER="tushare"
+$env:TUSHARE_TOKEN="your-local-token"
 ```
 
-当前行情范围只支持上交所、深交所、A 股股票、人民币、未复权日线。北交所、港股、美股、ETF、指数、分钟线、复权行情、技术指标、回测、策略和真实券商接入不在本阶段范围。
+Python 服务不可用或 Tushare Token 缺失都不会阻止 Spring Boot 启动，只在实际行情调用时返回明确错误。当前范围支持按代码或名称搜索上交所、深交所普通 A 股、ETF 和指数；股票与 ETF 可参与模拟交易，指数仅支持只读未复权日线。北交所、港股、美股、分钟线、复权行情、技术指标、回测、策略和真实券商接入不在本阶段范围。
 
 ## 常用验证
 
@@ -369,7 +392,10 @@ Testcontainers MySQL 集成测试命令：
 - BUY 执行中途失败时，订单仍为 `OPEN`，资金和持仓回滚；
 - SELL 执行中途失败时，订单、持仓和现金回滚；
 - 两个并发请求执行同一订单时，最多一个成功，且只产生一条成交记录；
-- 执行和取消并发操作同一订单时，只能一个操作成功。
+- 执行和取消并发操作同一订单时，只能一个操作成功；
+- V7 能升级旧证券类型约束、保留数据并重复执行；
+- V8 能放宽首条日线派生字段、保留关键非空约束和数据并重复执行；
+- 当前全新结构允许 `STOCK`、`ETF`、`INDEX`，并继续拒绝不支持的类型。
 
 ## 项目资产规则
 
@@ -441,6 +467,8 @@ source src/main/resources/db/migration/V4__create_risk_config_and_simulated_orde
 source src/main/resources/db/migration/V5__create_trade_and_cash_ledger_tables.sql;
 source src/main/resources/db/migration/V5_1__harden_cash_ledger.sql;
 source src/main/resources/db/migration/V6__add_historical_market_data.sql;
+source src/main/resources/db/migration/V7__allow_index_instruments.sql;
+source src/main/resources/db/migration/V8__allow_null_first_daily_price_change.sql;
 ```
 
 Each migration contains:
@@ -452,6 +480,10 @@ USE quant_guard;
 After the database exists, you can also open and run each full script in MySQL Workbench.
 
 `V5_1__harden_cash_ledger.sql` is an incremental hardening script. It adjusts valid `cash_ledger` entry types and adds the `(order_id, entry_type)` unique constraint. Run it once after V5. It is not intended to be executed repeatedly.
+
+`V7__allow_index_instruments.sql` expands the instrument type constraint to `STOCK`, `ETF`, and `INDEX`. It preserves existing instruments and trading data and can be run repeatedly on an existing database.
+
+`V8__allow_null_first_daily_price_change.sql` allows the first available daily bar to keep previous close, price change, and percentage change null instead of fabricating zero. It preserves existing daily prices and can be run repeatedly.
 
 Before running V5.1, check for duplicate ledger records:
 
@@ -489,31 +521,48 @@ Notes:
 
 ## Market Data Configuration
 
-Historical market data uses the official Tushare Pro HTTP API. Tokens must come from local environment variables or ignored local configuration files and must never be committed.
+V1.1 defaults to a local token-free Python adapter:
+
+- instrument metadata and types: BaoStock;
+- A-share stock daily bars: BaoStock;
+- Search catalog: BaoStock stocks/ETFs plus AKShare Sina indexes.
+- ETF daily bars: AKShare `fund_etf_hist_sina`.
+- Index daily bars: AKShare `stock_zh_index_daily`; indexes are read-only and cannot be traded.
+
+BaoStock and AKShare volume is normalized with `volume / 100` into `volumeLots`, and amount in CNY yuan is stored as `amountCny`. The Sina index endpoint has no amount field, so index daily bars currently use `0`. The first available bar keeps previous close, change, and percentage change null when no earlier close exists.
+
+The instrument catalog uses a six-hour in-process cache. Its first load requires upstream network access, and restarting the Python service rebuilds the cache. If the upstream is unavailable before the first successful load, catalog search returns an explicit unavailable or timeout error.
+
+Start the single-worker service from `quant-guard-market-data-python` before the backend. The Python service never accesses MySQL.
 
 PowerShell example:
 
 ```powershell
-$env:TUSHARE_TOKEN="your-local-token"
+$env:MARKET_DATA_PROVIDER="python"
+$env:PYTHON_MARKET_DATA_BASE_URL="http://127.0.0.1:8001"
 $env:MARKET_DATA_AUTO_SYNC_ENABLED="true"
 ```
 
 Defaults:
 
+- `MARKET_DATA_PROVIDER` defaults to `python`.
+- `PYTHON_MARKET_DATA_BASE_URL` defaults to `http://127.0.0.1:8001`.
+- Python connect timeout defaults to 3 seconds and read timeout to 30 seconds.
 - `TUSHARE_BASE_URL` defaults to `https://api.tushare.pro`.
 - `TUSHARE_TOKEN` defaults to empty.
-- `MARKET_DATA_DEFAULT_START_DATE` defaults to `2010-01-01`.
+- `MARKET_DATA_DEFAULT_START_DATE` defaults to `1990-01-01`.
 - `MARKET_DATA_AUTO_SYNC_ENABLED` defaults to `false`.
 - `MARKET_DATA_AUTO_SYNC_CRON` defaults to weekdays at 18:00.
 - automatic synchronization is disabled by default.
 
-The backend still starts when the token is missing. Import or synchronization calls return a clear error instead:
+Tushare remains available as an explicit alternative:
 
-```text
-Market data provider is not configured. Please set TUSHARE_TOKEN.
+```powershell
+$env:MARKET_DATA_PROVIDER="tushare"
+$env:TUSHARE_TOKEN="your-local-token"
 ```
 
-The current market-data scope is limited to SSE, SZSE, A-share stocks, CNY, and unadjusted daily bars. Beijing Stock Exchange, Hong Kong stocks, US stocks, ETFs, indexes, minute bars, adjusted prices, technical indicators, backtesting, strategies, and real broker access are out of scope for this phase.
+An unavailable Python service or missing Tushare token does not prevent Spring Boot startup; failures are reported only when market-data operations are called. The current scope supports code/name catalog search for SSE/SZSE A-share stocks, ETFs, and indexes. Stocks and ETFs are tradable in the simulator, while indexes are read-only daily-bar benchmarks. Other exchanges, minute bars, adjusted prices, backtesting, strategies, and real broker access remain out of scope.
 
 ## Common Validation
 
@@ -752,6 +801,9 @@ The integration tests verify:
 - if SELL execution fails halfway, the order, positions, and cash roll back;
 - when two concurrent requests execute the same order, at most one succeeds and only one trade record is created;
 - when execution and cancellation race on the same order, only one operation can succeed.
+- V7 upgrades the legacy instrument-type constraint, preserves data, and is repeatable;
+- V8 makes first-bar derived fields nullable, preserves required columns and data, and is repeatable;
+- the current fresh schema accepts `STOCK`, `ETF`, and `INDEX` while rejecting unsupported types.
 
 ## Project Asset Rules
 

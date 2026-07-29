@@ -7,6 +7,10 @@ import java.util.List;
 
 public interface MarketDataProvider {
 
+    default List<ProviderInstrumentMetadata> searchInstruments(String query, int limit) {
+        return List.of();
+    }
+
     List<ProviderInstrumentMetadata> lookupInstruments(List<MarketSymbol> symbols);
 
     List<ProviderDailyBar> fetchDailyBars(List<MarketSymbol> symbols, LocalDate startDate, LocalDate endDate);

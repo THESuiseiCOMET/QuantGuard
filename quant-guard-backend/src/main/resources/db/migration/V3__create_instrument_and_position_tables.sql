@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS security_instrument (
     symbol VARCHAR(32) NOT NULL COMMENT 'Normalized instrument symbol, such as 510300 or AAPL',
     exchange VARCHAR(20) NOT NULL COMMENT 'SSE, SZSE, BSE, HKEX, NASDAQ, or NYSE',
     instrument_name VARCHAR(128) NOT NULL COMMENT 'Instrument display name',
-    asset_type VARCHAR(20) NOT NULL COMMENT 'STOCK or ETF',
+    asset_type VARCHAR(20) NOT NULL COMMENT 'STOCK, ETF, or INDEX',
     currency VARCHAR(3) NOT NULL COMMENT 'ISO-like currency code such as CNY, HKD, or USD',
     lot_size DECIMAL(19,6) NOT NULL COMMENT 'Minimum tradable quantity unit',
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE or DISABLED',
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS security_instrument (
     CONSTRAINT uk_security_instrument_exchange_symbol UNIQUE (exchange, symbol),
     KEY idx_security_instrument_symbol (symbol),
     CONSTRAINT chk_security_instrument_exchange CHECK (exchange IN ('SSE', 'SZSE', 'BSE', 'HKEX', 'NASDAQ', 'NYSE')),
-    CONSTRAINT chk_security_instrument_asset_type CHECK (asset_type IN ('STOCK', 'ETF')),
+    CONSTRAINT chk_security_instrument_asset_type CHECK (asset_type IN ('STOCK', 'ETF', 'INDEX')),
     CONSTRAINT chk_security_instrument_status CHECK (status IN ('ACTIVE', 'DISABLED')),
     CONSTRAINT chk_security_instrument_lot_size CHECK (lot_size > 0)
 ) ENGINE=InnoDB

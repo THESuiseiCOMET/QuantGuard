@@ -11,8 +11,8 @@
             <span>证券列表</span>
             <small>{{ filteredInstruments.length }} 只</small>
           </div>
-          <el-button size="small" type="primary" :icon="Plus" @click="dialogVisible = true">
-            导入股票
+          <el-button size="small" type="primary" :icon="Plus" @click="openImportDialog">
+            添加证券
           </el-button>
         </div>
         <el-input v-model="filters.keyword" placeholder="搜索代码或名称" clearable />
@@ -30,7 +30,7 @@
         <el-alert
           v-if="filteredInstruments.length === 0"
           title="暂无证券"
-          description="请先导入证券代码。"
+          description="请先搜索并添加证券。"
           type="info"
           :closable="false"
         />
@@ -159,7 +159,14 @@
             </el-button>
             <el-button
               :icon="ShoppingCart"
-              :disabled="!selectedInstrumentId || selectedInstrument?.status !== 'ACTIVE'"
+              :disabled="
+                !selectedInstrumentId ||
+                selectedInstrument?.status !== 'ACTIVE' ||
+                selectedInstrument?.assetType === 'INDEX'
+              "
+              :title="
+                selectedInstrument?.assetType === 'INDEX' ? '指数仅用于查看行情，不能下单' : ''
+              "
               @click="goToOrder"
             >
               去下单
@@ -183,19 +190,44 @@
       </main>
     </div>
 
-    <el-dialog
-      v-model="dialogVisible"
-      title="批量导入 A 股证券"
-      width="min(960px, calc(100vw - 32px))"
-    >
+    <el-dialog v-model="dialogVisible" title="添加证券" width="min(960px, calc(100vw - 32px))">
       <el-form label-position="top">
-        <el-form-item label="股票代码">
-          <el-input
-            v-model="importText"
-            type="textarea"
-            :rows="6"
-            placeholder="每行输入一个股票代码，例如：&#10;600519&#10;000001.SZ&#10;SSE:601318"
-          />
+        <el-form-item label="按代码或名称搜索">
+          <el-select
+            v-model="selectedCatalogCodes"
+            class="full-width catalog-select"
+            multiple
+            filterable
+            remote
+            reserve-keyword
+            collapse-tags
+            collapse-tags-tooltip
+            :remote-method="searchCatalog"
+            :loading="catalogLoading"
+            placeholder="输入代码或名称，例如：000688、科创50"
+            :no-data-text="catalogNoDataText"
+          >
+            <el-option
+              v-for="item in catalogResults"
+              :key="item.canonicalCode"
+              :label="catalogOptionLabel(item)"
+              :value="item.canonicalCode"
+              :disabled="item.alreadyExists"
+            >
+              <div class="catalog-option">
+                <span>
+                  <strong>{{ item.instrumentName }}</strong>
+                  <small>
+                    {{ item.canonicalCode }} · {{ exchangeLabel(item.exchange) }} ·
+                    {{ assetTypeLabel(item.assetType) }}
+                  </small>
+                </span>
+                <el-tag v-if="item.alreadyExists" size="small" type="info" effect="plain">
+                  已添加
+                </el-tag>
+              </div>
+            </el-option>
+          </el-select>
         </el-form-item>
         <el-space>
           <el-checkbox v-model="syncOnImport">导入后同步历史日线</el-checkbox>
@@ -209,14 +241,20 @@
       </el-form>
 
       <div class="dialog-actions">
-        <el-button :loading="previewing" @click="previewImport">解析预览</el-button>
+        <el-button
+          :disabled="selectedCatalogCodes.length === 0"
+          :loading="previewing"
+          @click="previewImport"
+        >
+          检查所选证券
+        </el-button>
         <el-button
           type="primary"
           :disabled="validPreviewCount === 0"
           :loading="importing"
           @click="confirmImport"
         >
-          确认导入
+          添加到行情中心
         </el-button>
       </div>
 
@@ -230,8 +268,13 @@
       >
         <el-table-column prop="originalInput" label="原始输入" width="120" />
         <el-table-column prop="canonicalCode" label="标准代码" width="120" />
-        <el-table-column prop="instrumentName" label="股票名称" min-width="160" />
+        <el-table-column prop="instrumentName" label="证券名称" min-width="160" />
         <el-table-column prop="exchange" label="交易所" width="100" />
+        <el-table-column label="类型" width="90">
+          <template #default="{ row }: { row: ImportPreviewItem }">
+            {{ row.assetType ? assetTypeLabel(row.assetType) : '-' }}
+          </template>
+        </el-table-column>
         <el-table-column prop="currency" label="币种" width="90" />
         <el-table-column label="lotSize" width="100">
           <template #default="{ row }: { row: ImportPreviewItem }">
@@ -264,7 +307,7 @@
         table-layout="fixed"
       >
         <el-table-column prop="canonicalCode" label="标准代码" width="120" />
-        <el-table-column prop="instrumentName" label="股票名称" min-width="150" />
+        <el-table-column prop="instrumentName" label="证券名称" min-width="150" />
         <el-table-column prop="action" label="导入结果" width="100" />
         <el-table-column prop="priceSyncStatus" label="行情同步" width="110" />
         <el-table-column prop="recordsInserted" label="新增日线" width="90" />
@@ -282,6 +325,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, ShoppingCart } from '@element-plus/icons-vue'
+import { AxiosError } from 'axios'
 import PageHeader from '@/components/common/PageHeader.vue'
 import {
   deleteInstrument,
@@ -295,15 +339,18 @@ import {
   importInstruments,
   listInstrumentDailyPrices,
   previewInstrumentImport,
+  searchInstrumentCatalog,
   syncInstrumentDailyPrices,
 } from '@/api/marketData'
-import type { SecurityInstrument } from '@/types/instrument'
+import type { AssetType, Exchange, SecurityInstrument } from '@/types/instrument'
 import type {
   DailyPrice,
   DailyPriceSummary,
   ImportPreviewItem,
+  InstrumentCatalogItem,
   InstrumentImportResult,
 } from '@/types/marketData'
+import type { ApiResponse } from '@/types/api'
 import CandlestickChart from './components/CandlestickChart.vue'
 
 type RangeKey = '1M' | '3M' | '6M' | '1Y' | '3Y' | 'ALL'
@@ -333,17 +380,23 @@ const syncing = ref(false)
 const syncingInstrumentId = ref<number | null>(null)
 const previewing = ref(false)
 const importing = ref(false)
+const catalogLoading = ref(false)
+const catalogSearchAttempted = ref(false)
+const catalogSearchError = ref('')
 const errorMessage = ref('')
 const dialogVisible = ref(false)
-const importText = ref('')
+const catalogResults = ref<InstrumentCatalogItem[]>([])
+const selectedCatalogCodes = ref<string[]>([])
 const importStartDate = ref<string | null>(null)
 const syncOnImport = ref(true)
 const previewItems = ref<ImportPreviewItem[]>([])
 const importResults = ref<InstrumentImportResult[]>([])
 const rangeKey = ref<RangeKey>('1Y')
+let activeCatalogQuery = ''
 const visibleRange = ref<VisibleRange | null>(null)
 const customRangeActive = ref(false)
 let requestSeq = 0
+let catalogSearchSeq = 0
 
 const filters = reactive<{
   keyword: string
@@ -357,7 +410,12 @@ const filters = reactive<{
 
 const filteredInstruments = computed(() =>
   instruments.value.filter((instrument) => {
-    if (instrument.assetType !== 'STOCK' && instrument.assetType !== 'ETF') return false
+    if (
+      instrument.assetType !== 'STOCK' &&
+      instrument.assetType !== 'ETF' &&
+      instrument.assetType !== 'INDEX'
+    )
+      return false
     if (instrument.exchange !== 'SSE' && instrument.exchange !== 'SZSE') return false
     if (filters.exchange && instrument.exchange !== filters.exchange) return false
     if (filters.status && instrument.status !== filters.status) return false
@@ -383,6 +441,11 @@ const selectedInstrumentLabel = computed(() => {
 })
 
 const validPreviewCount = computed(() => previewItems.value.filter((item) => item.valid).length)
+const catalogNoDataText = computed(() => {
+  if (catalogSearchError.value) return catalogSearchError.value
+  if (catalogSearchAttempted.value) return '未找到匹配的证券'
+  return '请输入代码或名称搜索'
+})
 
 const displayRangeKey = computed<DisplayRangeKey>(() =>
   customRangeActive.value ? 'CUSTOM' : rangeKey.value,
@@ -415,6 +478,11 @@ watch(selectedInstrumentId, (value) => {
   } else {
     window.localStorage.removeItem(storageKey)
   }
+})
+
+watch(selectedCatalogCodes, () => {
+  previewItems.value = []
+  importResults.value = []
 })
 
 async function loadInstruments() {
@@ -491,9 +559,9 @@ function isRangeKey(value: unknown): value is RangeKey {
 }
 
 async function previewImport() {
-  const codes = parseImportInput()
+  const codes = selectedCatalogCodes.value
   if (codes.length === 0) {
-    ElMessage.warning('请输入股票代码')
+    ElMessage.warning('请先搜索并选择证券')
     return
   }
   previewing.value = true
@@ -510,6 +578,69 @@ async function previewImport() {
   } finally {
     previewing.value = false
   }
+}
+
+function openImportDialog() {
+  catalogSearchSeq += 1
+  selectedCatalogCodes.value = []
+  catalogResults.value = []
+  catalogSearchAttempted.value = false
+  catalogSearchError.value = ''
+  activeCatalogQuery = ''
+  catalogLoading.value = false
+  previewItems.value = []
+  importResults.value = []
+  dialogVisible.value = true
+}
+
+async function searchCatalog(query: string) {
+  const keyword = query.trim()
+  if (catalogLoading.value && keyword === activeCatalogQuery) return
+  const seq = ++catalogSearchSeq
+  if (!keyword) {
+    catalogResults.value = []
+    catalogSearchAttempted.value = false
+    catalogSearchError.value = ''
+    activeCatalogQuery = ''
+    catalogLoading.value = false
+    return
+  }
+  activeCatalogQuery = keyword
+  catalogSearchAttempted.value = true
+  catalogSearchError.value = ''
+  catalogLoading.value = true
+  try {
+    const results = await searchInstrumentCatalog(keyword, 30)
+    if (seq === catalogSearchSeq) catalogResults.value = results
+  } catch (error) {
+    if (seq === catalogSearchSeq) {
+      catalogResults.value = []
+      catalogSearchError.value = catalogSearchErrorText(error)
+    }
+  } finally {
+    if (seq === catalogSearchSeq) catalogLoading.value = false
+  }
+}
+
+function catalogSearchErrorText(error: unknown) {
+  const message =
+    error instanceof AxiosError
+      ? (error.response?.data as ApiResponse<unknown> | undefined)?.message || error.message
+      : error instanceof Error
+        ? error.message
+        : ''
+  const normalized = message.toLowerCase()
+  if (normalized.includes('timed out') || normalized.includes('timeout')) {
+    return '行情服务响应超时，请稍后重试'
+  }
+  if (
+    normalized.includes('unavailable') ||
+    normalized.includes('network') ||
+    normalized.includes('service unavailable')
+  ) {
+    return '行情服务不可用，请确认 Python 行情服务已启动'
+  }
+  return '证券目录搜索失败，请稍后重试'
 }
 
 async function confirmImport() {
@@ -570,7 +701,7 @@ async function syncInstrument(instrument: SecurityInstrument) {
 }
 
 function goToOrder() {
-  if (!selectedInstrumentId.value) return
+  if (!selectedInstrumentId.value || selectedInstrument.value?.assetType === 'INDEX') return
   void router.push({ path: '/orders', query: { instrumentId: String(selectedInstrumentId.value) } })
 }
 
@@ -671,13 +802,6 @@ async function forceRemoveInstrument(instrument: SecurityInstrument) {
   await loadInstruments()
 }
 
-function parseImportInput() {
-  return importText.value
-    .split(/[,，;；\s]+/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-}
-
 function rangeParams(key: RangeKey) {
   const now = new Date()
   const from = new Date(now)
@@ -733,10 +857,31 @@ function instrumentDisplayName(instrument: SecurityInstrument) {
 
 function instrumentSecondaryText(instrument: SecurityInstrument) {
   const displayName = instrumentDisplayName(instrument)
-  const assetType = instrument.assetType === 'ETF' ? 'ETF' : '股票'
+  const assetType = assetTypeLabel(instrument.assetType)
   return displayName === instrument.symbol
     ? `${assetType} · ${instrument.exchange}`
     : `${instrument.symbol} · ${instrument.exchange}`
+}
+
+function catalogOptionLabel(item: InstrumentCatalogItem) {
+  return `${item.instrumentName} · ${item.canonicalCode} · ${assetTypeLabel(item.assetType)}`
+}
+
+function assetTypeLabel(assetType: AssetType) {
+  const labels: Record<AssetType, string> = {
+    STOCK: '股票',
+    ETF: 'ETF',
+    INDEX: '指数',
+  }
+  return labels[assetType]
+}
+
+function exchangeLabel(exchange: Exchange) {
+  const labels: Partial<Record<Exchange, string>> = {
+    SSE: '上交所',
+    SZSE: '深交所',
+  }
+  return labels[exchange] ?? exchange
 }
 
 function statusLabel(status: SecurityInstrument['status']) {
@@ -992,6 +1137,28 @@ function formatDateTime(value: string | null | undefined) {
 .chart-panel :deep(.chart) {
   height: 460px;
   min-height: 340px;
+}
+
+.catalog-select {
+  width: 100%;
+}
+
+.catalog-option {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.catalog-option > span {
+  display: grid;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.catalog-option small {
+  color: var(--qg-text-muted);
 }
 
 .dialog-actions {

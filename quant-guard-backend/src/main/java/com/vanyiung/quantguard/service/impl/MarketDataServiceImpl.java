@@ -8,6 +8,7 @@ import com.vanyiung.quantguard.dto.DailyPriceSummaryResponse;
 import com.vanyiung.quantguard.dto.DailyPriceSyncRequest;
 import com.vanyiung.quantguard.dto.DailyPriceSyncResult;
 import com.vanyiung.quantguard.dto.ImportInstrumentsRequest;
+import com.vanyiung.quantguard.dto.InstrumentCatalogItem;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewItem;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewRequest;
 import com.vanyiung.quantguard.dto.InstrumentImportResult;
@@ -29,6 +30,7 @@ import com.vanyiung.quantguard.marketdata.provider.MarketDataProvider;
 import com.vanyiung.quantguard.marketdata.provider.MarketDataProviderException;
 import com.vanyiung.quantguard.marketdata.provider.ProviderDailyBar;
 import com.vanyiung.quantguard.marketdata.provider.ProviderInstrumentMetadata;
+import com.vanyiung.quantguard.marketdata.provider.ProviderInstrumentType;
 import com.vanyiung.quantguard.marketdata.symbol.MarketSymbol;
 import com.vanyiung.quantguard.marketdata.symbol.MarketSymbolParseResult;
 import com.vanyiung.quantguard.marketdata.symbol.MarketSymbolParser;
@@ -81,6 +83,33 @@ public class MarketDataServiceImpl implements MarketDataService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<InstrumentCatalogItem> searchInstrumentCatalog(String query, Integer limit) {
+        String normalizedQuery = query == null ? "" : query.trim();
+        if (normalizedQuery.isEmpty()) {
+            throw new BusinessRuleException("Search query is required");
+        }
+        int effectiveLimit = limit == null ? 20 : Math.max(1, Math.min(limit, 50));
+        return marketDataProvider.searchInstruments(normalizedQuery, effectiveLimit).stream()
+                .map(metadata -> {
+                    SecurityInstrument existing = findExisting(metadata.marketSymbol());
+                    return new InstrumentCatalogItem(
+                            metadata.marketSymbol().canonicalCode(),
+                            metadata.marketSymbol().symbol(),
+                            metadata.instrumentName(),
+                            metadata.exchange(),
+                            assetTypeFor(metadata),
+                            metadata.currency(),
+                            metadata.listStatus(),
+                            metadata.listDate(),
+                            existing != null,
+                            existing == null ? null : existing.getId()
+                    );
+                })
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<InstrumentImportPreviewItem> previewImport(InstrumentImportPreviewRequest request) {
         List<MarketSymbolParseResult> parsed = symbolParser.parseInputs(request.codes());
         List<MarketSymbol> validSymbols = parsed.stream()
@@ -107,9 +136,19 @@ public class MarketDataServiceImpl implements MarketDataService {
             ProviderInstrumentMetadata metadata = metadataByCode.get(symbol.canonicalCode());
             SecurityInstrument existing = findExisting(symbol);
             ProviderInstrumentMetadata effectiveMetadata = metadataOrFallback(symbol, metadata);
+            if (effectiveMetadata.instrumentType() == ProviderInstrumentType.UNKNOWN) {
+                items.add(new InstrumentImportPreviewItem(
+                        item.originalInput(), symbol.canonicalCode(), symbol.symbol(), symbol.exchange(),
+                        effectiveMetadata.instrumentName(), effectiveMetadata.currency(), null, null,
+                        effectiveMetadata.listStatus(), effectiveMetadata.listDate(), existing != null,
+                        existing == null ? null : existing.getId(), false,
+                        "Unsupported instrument type: UNKNOWN"));
+                continue;
+            }
             items.add(new InstrumentImportPreviewItem(
                     item.originalInput(), symbol.canonicalCode(), symbol.symbol(), symbol.exchange(),
-                    effectiveMetadata.instrumentName(), "CNY", AssetType.STOCK, lotSizeFor(symbol),
+                    effectiveMetadata.instrumentName(), effectiveMetadata.currency(),
+                    assetTypeFor(effectiveMetadata), lotSizeFor(symbol, effectiveMetadata),
                     effectiveMetadata.listStatus(), effectiveMetadata.listDate(), existing != null,
                     existing == null ? null : existing.getId(), true,
                     metadata == null ? metadataFallbackMessage(providerErrorMessage) : "OK"));
@@ -148,6 +187,7 @@ public class MarketDataServiceImpl implements MarketDataService {
         }
         boolean metadataFallback = metadata == null;
         metadata = metadataOrFallback(symbol, metadata);
+        AssetType assetType = assetTypeFor(metadata);
 
         SecurityInstrument existing = findExisting(symbol);
         LocalDateTime now = LocalDateTime.now(CHINA_ZONE);
@@ -163,9 +203,9 @@ public class MarketDataServiceImpl implements MarketDataService {
         }
 
         instrument.setInstrumentName(metadata.instrumentName());
-        instrument.setAssetType(AssetType.STOCK);
-        instrument.setCurrency("CNY");
-        instrument.setLotSize(lotSizeFor(symbol));
+        instrument.setAssetType(assetType);
+        instrument.setCurrency(metadata.currency());
+        instrument.setLotSize(lotSizeFor(symbol, metadata));
         instrument.setStatus("L".equals(metadata.listStatus()) ? InstrumentStatus.ACTIVE : InstrumentStatus.DISABLED);
         instrument.setUpdatedAt(now);
 
@@ -200,7 +240,7 @@ public class MarketDataServiceImpl implements MarketDataService {
         if (!isSupportedImportedInstrument(instrument)) {
             return new DailyPriceSyncResult(instrumentId, canonicalCode(instrument), "FAILED",
                     0, 0, 0, latestTradeDate(instrumentId),
-                    "Only ACTIVE SSE/SZSE STOCK instruments are supported");
+                    "Only ACTIVE SSE/SZSE stock, ETF, or index instruments are supported");
         }
 
         LocalDate endDate = request != null && request.endDate() != null ? request.endDate() : currentChinaDate();
@@ -324,7 +364,8 @@ public class MarketDataServiceImpl implements MarketDataService {
         if (metadata != null) {
             return metadata;
         }
-        return new ProviderInstrumentMetadata(symbol, symbol.canonicalCode(), symbol.exchange(), "CNY", "L", null);
+        return new ProviderInstrumentMetadata(symbol, symbol.canonicalCode(), symbol.exchange(), "CNY", "L", null,
+                ProviderInstrumentType.STOCK);
     }
 
     private String metadataFallbackMessage(String providerErrorMessage) {
@@ -344,17 +385,29 @@ public class MarketDataServiceImpl implements MarketDataService {
     private boolean hasMetadataChanged(SecurityInstrument existing, ProviderInstrumentMetadata metadata, MarketSymbol symbol) {
         return !Objects.equals(existing.getInstrumentName(), metadata.instrumentName())
                 || existing.getExchange() != symbol.exchange()
-                || existing.getAssetType() != AssetType.STOCK
-                || !Objects.equals(existing.getCurrency(), "CNY")
-                || existing.getLotSize().compareTo(lotSizeFor(symbol)) != 0
+                || existing.getAssetType() != assetTypeFor(metadata)
+                || !Objects.equals(existing.getCurrency(), metadata.currency())
+                || existing.getLotSize().compareTo(lotSizeFor(symbol, metadata)) != 0
                 || existing.getStatus() != ("L".equals(metadata.listStatus()) ? InstrumentStatus.ACTIVE : InstrumentStatus.DISABLED);
     }
 
-    private BigDecimal lotSizeFor(MarketSymbol symbol) {
+    private BigDecimal lotSizeFor(MarketSymbol symbol, ProviderInstrumentMetadata metadata) {
+        if (metadata.instrumentType() == ProviderInstrumentType.INDEX) {
+            return BigDecimal.ONE.setScale(6);
+        }
         if (symbol.exchange() == Exchange.SSE && symbol.symbol().startsWith("688")) {
             return new BigDecimal("200.000000");
         }
         return new BigDecimal("100.000000");
+    }
+
+    private AssetType assetTypeFor(ProviderInstrumentMetadata metadata) {
+        return switch (metadata.instrumentType()) {
+            case STOCK -> AssetType.STOCK;
+            case ETF -> AssetType.ETF;
+            case INDEX -> AssetType.INDEX;
+            case UNKNOWN -> throw new BusinessRuleException("Unsupported instrument type: UNKNOWN");
+        };
     }
 
     private SecurityInstrument requireInstrument(Long instrumentId) {
@@ -367,7 +420,9 @@ public class MarketDataServiceImpl implements MarketDataService {
 
     private boolean isSupportedImportedInstrument(SecurityInstrument instrument) {
         return instrument.getStatus() == InstrumentStatus.ACTIVE
-                && instrument.getAssetType() == AssetType.STOCK
+                && (instrument.getAssetType() == AssetType.STOCK
+                || instrument.getAssetType() == AssetType.ETF
+                || instrument.getAssetType() == AssetType.INDEX)
                 && (instrument.getExchange() == Exchange.SSE || instrument.getExchange() == Exchange.SZSE);
     }
 
@@ -473,7 +528,8 @@ public class MarketDataServiceImpl implements MarketDataService {
         if (request.syncAllImportedInstruments()) {
             return securityInstrumentMapper.selectList(Wrappers.<SecurityInstrument>lambdaQuery()
                             .eq(SecurityInstrument::getStatus, InstrumentStatus.ACTIVE)
-                            .eq(SecurityInstrument::getAssetType, AssetType.STOCK)
+                            .in(SecurityInstrument::getAssetType,
+                                    List.of(AssetType.STOCK, AssetType.ETF, AssetType.INDEX))
                             .in(SecurityInstrument::getExchange, List.of(Exchange.SSE, Exchange.SZSE))
                             .orderByAsc(SecurityInstrument::getExchange)
                             .orderByAsc(SecurityInstrument::getSymbol))

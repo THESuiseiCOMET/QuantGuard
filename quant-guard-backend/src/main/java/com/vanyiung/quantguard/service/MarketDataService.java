@@ -10,11 +10,14 @@ import com.vanyiung.quantguard.dto.ImportInstrumentsRequest;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewItem;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewRequest;
 import com.vanyiung.quantguard.dto.InstrumentImportResult;
+import com.vanyiung.quantguard.dto.InstrumentCatalogItem;
 
 import java.time.LocalDate;
 import java.util.List;
 
 public interface MarketDataService {
+
+    List<InstrumentCatalogItem> searchInstrumentCatalog(String query, Integer limit);
 
     List<InstrumentImportPreviewItem> previewImport(InstrumentImportPreviewRequest request);
 

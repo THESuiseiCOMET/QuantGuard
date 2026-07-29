@@ -377,6 +377,24 @@ class SimulatedOrderServiceImplTest {
     }
 
     @Test
+    void buyOrderRejectsReadOnlyIndexInstrument() {
+        SecurityInstrument instrument = instrument(BigDecimal.ONE);
+        instrument.setAssetType(AssetType.INDEX);
+        when(simulationAccountMapper.selectById(1L)).thenReturn(account(new BigDecimal("100000.0000")));
+        when(investmentPortfolioMapper.selectById(1L)).thenReturn(portfolio(1L, 1L));
+        when(securityInstrumentMapper.selectById(1L)).thenReturn(instrument);
+
+        BusinessRuleException error = assertThrows(
+                BusinessRuleException.class,
+                () -> simulatedOrderService.create(new CreateSimulatedOrderRequest(
+                        1L, 1L, 1L, OrderSide.BUY, OrderType.LIMIT,
+                        BigDecimal.ONE, new BigDecimal("10.0000"))));
+
+        assertEquals("Index instruments are read-only and cannot be traded", error.getMessage());
+        verify(simulatedOrderMapper, never()).insert(any(SimulatedOrder.class));
+    }
+
+    @Test
     void sellOrderRejectsMissingPositionWithoutCreatingOrder() {
         stubCommonBuySellState(account(new BigDecimal("100000.0000")), portfolio(1L, 1L), instrument(new BigDecimal("100.000000")));
         when(portfolioPositionMapper.selectOne(any())).thenReturn(null);

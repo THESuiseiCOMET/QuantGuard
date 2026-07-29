@@ -33,7 +33,7 @@ class MarketDataControllerTest {
 
         mockMvc.perform(get("/api/market-data/config"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.provider", is("tushare")))
+                .andExpect(jsonPath("$.data.provider", is("python")))
                 .andExpect(jsonPath("$.data.tokenConfigured", is(true)))
                 .andExpect(jsonPath("$.data.token").doesNotExist());
     }

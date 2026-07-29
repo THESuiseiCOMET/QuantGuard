@@ -127,7 +127,7 @@ const navItems = [
   { path: '/market-data', label: '行情中心', icon: DataAnalysis },
   { path: '/orders', label: '模拟订单', icon: Tickets },
   { path: '/recovery-calculator', label: '回本计算', icon: Calculator },
-  { path: '/settings', label: '设置', icon: Setting },
+  { path: '/settings', label: '设置中心', icon: Setting },
 ]
 
 const activePath = computed(() => {
@@ -331,6 +331,7 @@ async function toggleTheme(event: MouseEvent) {
   background: transparent;
   cursor: pointer;
   font: inherit;
+  font-size: var(--el-menu-item-font-size, 14px);
   text-align: left;
 }
 
@@ -344,13 +345,24 @@ async function toggleTheme(event: MouseEvent) {
 }
 
 .theme-toggle .el-icon {
+  display: inline-flex;
   flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
   font-size: 18px;
+  line-height: 1;
 }
 
 .theme-label {
+  display: flex;
+  align-items: center;
+  height: 24px;
   max-width: 100px;
   overflow: hidden;
+  line-height: 24px;
   opacity: 1;
   white-space: nowrap;
   transition:

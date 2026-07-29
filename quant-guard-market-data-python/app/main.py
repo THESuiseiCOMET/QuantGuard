@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app import __version__
 from app.errors import ErrorCode
 from app.models import (
     DailyBarsRequest,
@@ -16,7 +17,7 @@ from app.models import (
 from app.service import MarketDataService
 
 
-app = FastAPI(title="QuantGuard Market Data Python", version="1.1.0")
+app = FastAPI(title="QuantGuard Market Data Python", version=__version__)
 service = MarketDataService()
 
 

@@ -181,6 +181,37 @@ QuantGuard V1.1 提供本地模拟交易和无 Token 历史行情底座。
 
 V1.2-A 开发分支新增 Windows 桌面运行底座：后端可通过 H2 File 在没有 MySQL 的环境中持久运行，但尚未生成桌面客户端或安装包。
 
+V1.2-B 开发提供两套 Windows 自包含运行目录：Python 行情服务使用 PyInstaller `onedir`，Spring Boot 后端使用 `jpackage --type app-image` 并携带 Java 21 Runtime。它们用于后续 Tauri sidecar 集成，目前仍不是安装包。
+
+准备好项目虚拟环境中的运行与构建依赖后，可从仓库根目录执行：
+
+```powershell
+.\quant-guard-market-data-python\.venv\Scripts\python.exe -m pip install `
+  -r .\quant-guard-market-data-python\requirements-build.txt
+.\scripts\build-desktop-runtimes.ps1
+```
+
+输出位于被 Git 忽略的 `dist\desktop-runtime\`：
+
+```text
+desktop-runtime/
+├─ market-data/
+│  ├─ quantguard-market-data.exe
+│  └─ PyInstaller dependencies
+└─ backend/
+   ├─ QuantGuardBackend.exe
+   ├─ app/
+   └─ runtime/
+```
+
+统一脚本会运行 Python 和 Java 测试、构建两个运行目录，并在移除 Python/JDK 环境路径后验证健康检查、H2 建库与重启持久化。真实行情网络调用仅供手动 smoke 使用，不作为 CI 绿色条件：
+
+```powershell
+.\scripts\test-desktop-runtimes.ps1 -RunLiveMarketData
+```
+
+当前 H2 2.4 会显示 Flyway 尚未充分验证该新版本的提示。本地和 CI 迁移测试会继续保留该提示与门禁，本阶段不为隐藏警告而盲目降级依赖。
+
 后端核心模拟链路已经覆盖模拟账户、投资组合、证券标的、订单、成交、资金流水和风控检查。
 
 V1.1 支持上交所和深交所普通 A 股、ETF 与指数的目录搜索和历史未复权日线。股票与 ETF 可以参与模拟交易，指数仅用于行情展示。证券目录使用六小时进程内缓存：首次加载依赖网络，Python 服务重启后会重新建立缓存，上游不可用时首次搜索可能失败。实时行情、分钟行情、复权行情、自动撮合、回测、策略执行、登录权限、桌面客户端、生产部署和真实券商接入不在当前版本范围。
@@ -377,6 +408,37 @@ The repository currently includes:
 QuantGuard V1.1 provides a local trading simulator with a token-free historical market-data foundation.
 
 The V1.2-A development branch adds a Windows desktop runtime foundation: the backend can persist with H2 File without MySQL, but no desktop client or installer is produced yet.
+
+V1.2-B development produces two self-contained Windows runtime directories: a PyInstaller `onedir` market-data service and a Spring Boot `jpackage --type app-image` with its Java 21 Runtime. They are inputs for later Tauri sidecar integration, not installers.
+
+After preparing the project virtual environment and packaging dependency, build from the repository root:
+
+```powershell
+.\quant-guard-market-data-python\.venv\Scripts\python.exe -m pip install `
+  -r .\quant-guard-market-data-python\requirements-build.txt
+.\scripts\build-desktop-runtimes.ps1
+```
+
+Git-ignored output is written under `dist\desktop-runtime\`:
+
+```text
+desktop-runtime/
+├─ market-data/
+│  ├─ quantguard-market-data.exe
+│  └─ PyInstaller dependencies
+└─ backend/
+   ├─ QuantGuardBackend.exe
+   ├─ app/
+   └─ runtime/
+```
+
+The unified script tests Python and Java, builds both runtime directories, removes Python/JDK paths from smoke-test processes, and verifies health, H2 creation, and restart persistence. Real upstream market-data calls remain manual smoke tests and are not CI gates:
+
+```powershell
+.\scripts\test-desktop-runtimes.ps1 -RunLiveMarketData
+```
+
+H2 2.4 currently produces Flyway's warning that this newer H2 release has not been fully verified. The warning remains visible, and migration tests remain mandatory; this phase does not downgrade dependencies merely to hide it.
 
 The backend core simulation loop is implemented through simulated accounts, portfolios, instruments, orders, trades, cash ledger records, and risk checks.
 

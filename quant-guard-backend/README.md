@@ -63,6 +63,25 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-dev.ps1 -
 
 当前只是浏览器开发模式的桌面运行底座，不包含 Tauri、Java Runtime、Python 可执行文件或 Windows 安装包。
 
+## Windows 自包含后端目录
+
+V1.2-B 使用 Java 21 `jpackage --type app-image` 将实际 Spring Boot 可执行 JAR 和 Java Runtime 组合为：
+
+```text
+dist\desktop-runtime\backend\
+├─ QuantGuardBackend.exe
+├─ app\
+└─ runtime\
+```
+
+构建脚本会从 JAR manifest 读取真实 `Main-Class` 与 `Start-Class`，不会硬编码猜测业务主类：
+
+```powershell
+.\scripts\build-backend-runtime.ps1
+```
+
+启动器默认启用 `desktop` Profile，继续接收 Spring Boot 命令行参数，并继承 `QUANTGUARD_DATA_DIR`、`PYTHON_MARKET_DATA_BASE_URL` 等环境变量。数据库和日志仍写入用户数据目录，不写入 app-image。该目录不依赖系统 JDK，但当前不是 Tauri sidecar 或安装包。
+
 ## 本地数据库初始化
 
 后端使用本地 MySQL 数据库：
@@ -496,6 +515,25 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-dev.ps1 -
 ```
 
 This is a desktop runtime foundation, not yet a Tauri client, bundled Java/Python runtime, or Windows installer.
+
+## Self-contained Windows backend directory
+
+V1.2-B uses Java 21 `jpackage --type app-image` to combine the executable Spring Boot JAR and Java Runtime:
+
+```text
+dist\desktop-runtime\backend\
+├─ QuantGuardBackend.exe
+├─ app\
+└─ runtime\
+```
+
+The build script reads the actual `Main-Class` and `Start-Class` from the JAR manifest instead of guessing the business entry point:
+
+```powershell
+.\scripts\build-backend-runtime.ps1
+```
+
+The launcher enables the `desktop` Profile by default, accepts additional Spring Boot arguments, and inherits `QUANTGUARD_DATA_DIR`, `PYTHON_MARKET_DATA_BASE_URL`, and related environment variables. Database and logs remain under user data rather than the app-image directory. This directory does not require a system JDK, but is not yet a Tauri sidecar or installer.
 
 ## Local Database Initialization
 

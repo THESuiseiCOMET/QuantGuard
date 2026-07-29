@@ -3,6 +3,8 @@ spring:
     name: quant-guard-backend
   config:
     import: optional:application-local.yaml
+  flyway:
+    enabled: false
 
 mybatis-plus:
   configuration:

@@ -58,7 +58,8 @@ QuantGuard/
 - Spring Boot
 - Maven Wrapper
 - MyBatis-Plus
-- MySQL
+- MySQL / H2 File
+- Flyway（仅 desktop Profile）
 - JUnit
 - Testcontainers
 
@@ -74,7 +75,32 @@ QuantGuard/
 
 ### 快速开始
 
-首次使用前，按下面的手动步骤准备 Python 虚拟环境、前端依赖和本地 MySQL 配置。准备完成后，可以在仓库根目录一键启动三个开发服务：
+V1.1 的默认开发/服务器模式继续使用 MySQL。V1.2-A 新增 `desktop` Profile，可将数据库、日志和运行状态保存在 Windows 用户数据目录中，不需要安装 MySQL。
+
+准备好 Python 虚拟环境和前端依赖后，可在仓库根目录一键启动桌面开发模式：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1 -Desktop
+```
+
+停止桌面开发模式：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-dev.ps1 -Desktop
+```
+
+默认用户数据目录为 `%APPDATA%\QuantGuard\`，包含 `data`、`logs`、`config` 和 `runtime`。测试或自定义路径时可设置 `QUANTGUARD_DATA_DIR`，或向脚本传入 `-DataDirectory`。用户数据库不应放在仓库或未来的程序安装目录中。
+
+桌面模式使用 H2 File，并只在 `desktop` Profile 中启用 Flyway 自动迁移。手动启动后端的示例：
+
+```powershell
+cd quant-guard-backend
+$env:SPRING_PROFILES_ACTIVE="desktop"
+$env:QUANTGUARD_DATA_DIR="C:\path\to\your\data"
+.\mvnw.cmd spring-boot:run
+```
+
+现有 MySQL 开发模式保持不变：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
@@ -86,7 +112,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-dev.ps1
 ```
 
-脚本只用于开发和演示。它不会安装依赖、修改数据库或写入 Token；运行日志和 PID 保存在被 Git 忽略的 `.runtime/`。这不是桌面客户端或安装包。
+脚本只用于开发和演示。它不会安装依赖或写入 Token；MySQL 模式的日志和 PID 保存在 `.runtime/`，桌面模式保存在用户数据目录。这仍不是 Tauri 客户端或安装包，前端需要通过浏览器访问。Python、Java Runtime 和 Tauri 的独立打包属于后续阶段。
 
 在 monorepo 根目录运行后端测试：
 
@@ -144,6 +170,7 @@ http://localhost:5173
 仓库当前包含：
 
 - 后端 CI：push 和 pull request 时运行后端 Maven 测试；
+- 桌面 H2 CI：作为普通后端测试执行，明确校验 6 条桌面路径与持久化测试没有被跳过；
 - 后端集成 CI：后端变更的 push、pull request 和手动触发时，使用 Docker/Testcontainers 运行事务与数据库结构集成测试；
 - Python 行情 CI：Python 行情服务变更时安装锁定版本依赖，运行离线测试和模块编译；
 - 前端 CI：push 和 pull request 时运行 `npm ci`、类型检查、lint、浏览器 E2E 和构建。
@@ -151,6 +178,8 @@ http://localhost:5173
 ### 项目状态
 
 QuantGuard V1.1 提供本地模拟交易和无 Token 历史行情底座。
+
+V1.2-A 开发分支新增 Windows 桌面运行底座：后端可通过 H2 File 在没有 MySQL 的环境中持久运行，但尚未生成桌面客户端或安装包。
 
 后端核心模拟链路已经覆盖模拟账户、投资组合、证券标的、订单、成交、资金流水和风控检查。
 
@@ -226,7 +255,8 @@ Backend:
 - Spring Boot
 - Maven Wrapper
 - MyBatis-Plus
-- MySQL
+- MySQL / H2 File
+- Flyway (desktop Profile only)
 - JUnit
 - Testcontainers
 
@@ -242,7 +272,32 @@ Frontend:
 
 ### Quick Start
 
-After preparing the Python virtual environment, frontend dependencies, and local MySQL configuration with the manual steps below, start all three development services from the repository root:
+V1.1's default development/server mode continues to use MySQL. V1.2-A adds a `desktop` Profile that stores the database, logs, and runtime state under the Windows user data directory without requiring MySQL.
+
+After preparing the Python environment and frontend dependencies, start the desktop development mode from the repository root:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1 -Desktop
+```
+
+Stop it with:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-dev.ps1 -Desktop
+```
+
+The default directory is `%APPDATA%\QuantGuard\`, with `data`, `logs`, `config`, and `runtime` children. Override it with `QUANTGUARD_DATA_DIR` or the script's `-DataDirectory` option. User data should not live in the repository or a future installation directory.
+
+Desktop mode uses H2 File and enables Flyway only under the `desktop` Profile. Manual backend example:
+
+```powershell
+cd quant-guard-backend
+$env:SPRING_PROFILES_ACTIVE="desktop"
+$env:QUANTGUARD_DATA_DIR="C:\path\to\your\data"
+.\mvnw.cmd spring-boot:run
+```
+
+The existing MySQL development mode remains available:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
@@ -254,7 +309,7 @@ Stop only the processes started by that script:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-dev.ps1
 ```
 
-The scripts are for development and demos only. They do not install dependencies, modify the database, or write tokens. Logs and PID state are stored under the Git-ignored `.runtime/` directory. They are not a desktop client or installer.
+The scripts are for development and demos only. They do not install dependencies or write tokens. MySQL-mode logs and PID state use `.runtime/`; desktop mode uses the user data directory. This is not yet a Tauri client or installer, and the frontend still opens in a browser. Packaging Python, Java Runtime, and Tauri belongs to a later phase.
 
 Prepare and start the token-free single-worker service:
 
@@ -312,6 +367,7 @@ http://localhost:5173
 The repository currently includes:
 
 - backend CI: runs Maven backend tests on push and pull request;
+- desktop H2 CI: runs with regular backend tests and explicitly verifies that all six desktop path and persistence tests executed without skips;
 - backend integration CI: runs Docker/Testcontainers transaction and schema tests for backend changes on push, pull request, or manual dispatch;
 - Python market-data CI: installs pinned dependencies and runs offline tests plus module compilation for Python service changes;
 - frontend CI: runs `npm ci`, type check, lint, browser E2E tests, and build on push and pull request.
@@ -319,6 +375,8 @@ The repository currently includes:
 ### Project Status
 
 QuantGuard V1.1 provides a local trading simulator with a token-free historical market-data foundation.
+
+The V1.2-A development branch adds a Windows desktop runtime foundation: the backend can persist with H2 File without MySQL, but no desktop client or installer is produced yet.
 
 The backend core simulation loop is implemented through simulated accounts, portfolios, instruments, orders, trades, cash ledger records, and risk checks.
 

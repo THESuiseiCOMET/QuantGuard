@@ -1,10 +1,16 @@
 [CmdletBinding()]
-param()
+param(
+    [switch]$Desktop,
+    [string]$DataDirectory
+)
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$runtimeDir = Join-Path $repoRoot '.runtime'
-$logDir = Join-Path $runtimeDir 'logs'
+$pathHelpers = Join-Path $PSScriptRoot 'dev-paths.ps1'
+. $pathHelpers
+$layout = Get-QuantGuardRuntimeLayout -RepoRoot $repoRoot -Desktop:$Desktop -DataDirectory $DataDirectory
+$runtimeDir = $layout.runtimeDir
+$logDir = $layout.logDir
 $statePath = Join-Path $runtimeDir 'dev-processes.json'
 $stopScript = Join-Path $PSScriptRoot 'stop-dev.ps1'
 $services = @()
@@ -26,6 +32,8 @@ function Assert-CommandAvailable {
 function Save-ProcessState {
     $state = @{
         repoRoot = $repoRoot
+        mode = $layout.mode
+        dataRoot = $layout.dataRoot
         createdAt = (Get-Date).ToUniversalTime().ToString('o')
         services = $services
     }
@@ -57,8 +65,8 @@ function Start-ManagedCommand {
         port = $Port
         pid = $process.Id
         startTimeFileUtc = $startedProcess.StartTime.ToFileTimeUtc()
-        stdout = $stdoutPath.Substring($repoRoot.Length + 1)
-        stderr = $stderrPath.Substring($repoRoot.Length + 1)
+        stdout = $stdoutPath
+        stderr = $stderrPath
     }
     Save-ProcessState
 }
@@ -81,12 +89,12 @@ function Wait-HttpEndpoint {
             Start-Sleep -Milliseconds 500
         }
     }
-    throw "$Name did not become healthy within $TimeoutSeconds seconds. Check .runtime/logs."
+    throw "$Name did not become healthy within $TimeoutSeconds seconds. Check $logDir."
 }
 
 try {
     if (Test-Path -LiteralPath $statePath) {
-        & $stopScript
+        & $stopScript -Desktop:$Desktop -DataDirectory $DataDirectory
     }
 
     $pythonDir = Join-Path $repoRoot 'quant-guard-market-data-python'
@@ -115,13 +123,22 @@ try {
         }
     }
 
+    New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
     New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 
     $pythonCommand = "& '$pythonExe' -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 1"
     Start-ManagedCommand 'market-data' 8001 $pythonCommand $pythonDir
     Wait-HttpEndpoint 'Python market-data service' 'http://127.0.0.1:8001/health' 45
 
-    $backendCommand = "`$env:MARKET_DATA_PROVIDER='python'; & '$mavenWrapper' spring-boot:run"
+    if ($Desktop) {
+        $escapedDataRoot = $layout.dataRoot.Replace("'", "''")
+        $backendCommand = "`$env:MARKET_DATA_PROVIDER='python'; " +
+            "`$env:SPRING_PROFILES_ACTIVE='desktop'; " +
+            "`$env:QUANTGUARD_DATA_DIR='$escapedDataRoot'; " +
+            "& '$mavenWrapper' spring-boot:run"
+    } else {
+        $backendCommand = "`$env:MARKET_DATA_PROVIDER='python'; & '$mavenWrapper' spring-boot:run"
+    }
     Start-ManagedCommand 'backend' 8080 $backendCommand $backendDir
     Wait-HttpEndpoint 'Spring Boot backend' 'http://127.0.0.1:8080/api/health' 90
 
@@ -130,14 +147,21 @@ try {
     Wait-HttpEndpoint 'Vue frontend' 'http://127.0.0.1:5173/' 60
 
     Write-Host 'QuantGuard development services are ready:'
-    Write-Host '  Frontend:    http://127.0.0.1:5173/'
-    Write-Host '  Backend:     http://127.0.0.1:8080/api/health'
-    Write-Host '  Market data: http://127.0.0.1:8001/health'
-    Write-Host "  Logs:        $logDir"
+    Write-Host "  运行模式：$($layout.mode)"
+    if ($Desktop) {
+        Write-Host '  数据库：H2 File'
+        Write-Host "  数据目录：$($layout.dataRoot)"
+    } else {
+        Write-Host '  数据库：MySQL'
+    }
+    Write-Host '  Python：http://127.0.0.1:8001'
+    Write-Host '  后端：http://127.0.0.1:8080'
+    Write-Host '  前端：http://127.0.0.1:5173'
+    Write-Host "  日志目录：$logDir"
 } catch {
     Write-Error $_ -ErrorAction Continue
     if ($services.Count -gt 0 -and (Test-Path -LiteralPath $stopScript)) {
-        & $stopScript
+        & $stopScript -Desktop:$Desktop -DataDirectory $DataDirectory
     }
     exit 1
 }

@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "release/**"
+      - "feature/**"
   pull_request:
     branches:
       - main
@@ -41,6 +42,42 @@ jobs:
       - name: Run backend tests
         working-directory: quant-guard-backend
         run: ./mvnw --batch-mode clean test
+
+      - name: Verify desktop H2 tests were executed
+        shell: bash
+        working-directory: quant-guard-backend
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+          import xml.etree.ElementTree as ET
+
+          expected = {
+              "com.vanyiung.quantguard.desktop.DesktopDataDirectoriesTest": 3,
+              "com.vanyiung.quantguard.desktop.DesktopDatabaseIntegrationTest": 3,
+          }
+          total = 0
+          for suite, expected_tests in expected.items():
+              report = Path("target/surefire-reports") / f"TEST-{suite}.xml"
+              if not report.exists():
+                  print(f"Missing desktop test report: {report}")
+                  sys.exit(1)
+
+              root = ET.parse(report).getroot()
+              result = (
+                  int(root.attrib.get("tests", "0")),
+                  int(root.attrib.get("skipped", "0")),
+                  int(root.attrib.get("failures", "0")),
+                  int(root.attrib.get("errors", "0")),
+              )
+              print(f"{suite}: tests={result[0]}, skipped={result[1]}, failures={result[2]}, errors={result[3]}")
+              if result != (expected_tests, 0, 0, 0):
+                  print(f"Expected {expected_tests} passing, non-skipped tests in {suite}.")
+                  sys.exit(1)
+              total += result[0]
+
+          print(f"Desktop H2 tests executed: {total}")
+          PY
 
       - name: Upload test reports on failure
         if: failure()

@@ -1,9 +1,15 @@
 [CmdletBinding()]
-param()
+param(
+    [switch]$Desktop,
+    [string]$DataDirectory
+)
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$runtimeDir = Join-Path $repoRoot '.runtime'
+$pathHelpers = Join-Path $PSScriptRoot 'dev-paths.ps1'
+. $pathHelpers
+$layout = Get-QuantGuardRuntimeLayout -RepoRoot $repoRoot -Desktop:$Desktop -DataDirectory $DataDirectory
+$runtimeDir = $layout.runtimeDir
 $statePath = Join-Path $runtimeDir 'dev-processes.json'
 
 if (-not (Test-Path -LiteralPath $statePath)) {

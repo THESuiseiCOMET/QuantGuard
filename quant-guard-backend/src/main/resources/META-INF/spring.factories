@@ -1,0 +1,2 @@
+org.springframework.boot.EnvironmentPostProcessor=\
+com.vanyiung.quantguard.desktop.DesktopEnvironmentPostProcessor

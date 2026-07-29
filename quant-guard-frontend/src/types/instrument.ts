@@ -1,5 +1,5 @@
 export type Exchange = 'SSE' | 'SZSE' | 'BSE' | 'HKEX' | 'NASDAQ' | 'NYSE'
-export type AssetType = 'STOCK' | 'ETF'
+export type AssetType = 'STOCK' | 'ETF' | 'INDEX'
 export type InstrumentStatus = 'ACTIVE' | 'DISABLED'
 export type DecimalValue = string | number
 

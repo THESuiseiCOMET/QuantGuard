@@ -11,6 +11,7 @@ public record ProviderInstrumentMetadata(
         Exchange exchange,
         String currency,
         String listStatus,
-        LocalDate listDate
+        LocalDate listDate,
+        ProviderInstrumentType instrumentType
 ) {
 }

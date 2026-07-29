@@ -2,6 +2,8 @@ package com.vanyiung.quantguard.controller;
 
 import com.vanyiung.quantguard.exception.GlobalExceptionHandler;
 import com.vanyiung.quantguard.exception.ResourceNotFoundException;
+import com.vanyiung.quantguard.marketdata.provider.MarketDataProviderErrorType;
+import com.vanyiung.quantguard.marketdata.provider.MarketDataProviderException;
 import com.vanyiung.quantguard.service.MarketDataService;
 import com.vanyiung.quantguard.service.PortfolioPositionService;
 import com.vanyiung.quantguard.service.SecurityInstrumentService;
@@ -118,6 +120,34 @@ class InstrumentAndPositionApiErrorHandlingTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message").value("Security instrument not found"));
+    }
+
+    @Test
+    void unavailableMarketDataServiceReturnsServiceUnavailable() throws Exception {
+        when(marketDataService.searchInstrumentCatalog("600519", null))
+                .thenThrow(new MarketDataProviderException(
+                        MarketDataProviderErrorType.UPSTREAM_UNAVAILABLE,
+                        "Python market data service is unavailable"));
+
+        instrumentMockMvc.perform(get("/api/instruments/catalog/search")
+                        .param("query", "600519"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Python market data service is unavailable"));
+    }
+
+    @Test
+    void marketDataTimeoutReturnsGatewayTimeout() throws Exception {
+        when(marketDataService.searchInstrumentCatalog("科创50", null))
+                .thenThrow(new MarketDataProviderException(
+                        MarketDataProviderErrorType.TIMEOUT,
+                        "Python market data service request timed out"));
+
+        instrumentMockMvc.perform(get("/api/instruments/catalog/search")
+                        .param("query", "科创50"))
+                .andExpect(status().isGatewayTimeout())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Python market data service request timed out"));
     }
 
     @Test

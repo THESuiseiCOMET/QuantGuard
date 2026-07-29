@@ -12,6 +12,7 @@
   --qg-sidebar-active: #1f8a70;
   --qg-text: #172033;
   --qg-text-muted: #6b7280;
+  --qg-zero-value: #000000;
   --qg-border: #dce3ee;
   --qg-subtle: #f8fafc;
   --qg-sidebar-bg: #ffffff;
@@ -33,6 +34,7 @@ html.dark {
   --qg-panel: #212121;
   --qg-text: #f3f4f6;
   --qg-text-muted: #a3a3a3;
+  --qg-zero-value: #ffffff;
   --qg-border: #3f3f46;
   --qg-subtle: #292929;
   --qg-sidebar-bg: #171717;

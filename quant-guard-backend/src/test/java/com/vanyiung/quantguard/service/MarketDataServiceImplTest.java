@@ -5,6 +5,7 @@ import com.vanyiung.quantguard.dto.DailyPriceSummaryResponse;
 import com.vanyiung.quantguard.dto.DailyPriceSyncRequest;
 import com.vanyiung.quantguard.dto.DailyPriceSyncResult;
 import com.vanyiung.quantguard.dto.ImportInstrumentsRequest;
+import com.vanyiung.quantguard.dto.InstrumentCatalogItem;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewItem;
 import com.vanyiung.quantguard.dto.InstrumentImportPreviewRequest;
 import com.vanyiung.quantguard.dto.InstrumentImportResult;
@@ -21,6 +22,9 @@ import com.vanyiung.quantguard.marketdata.config.MarketDataProperties;
 import com.vanyiung.quantguard.marketdata.provider.MarketDataProvider;
 import com.vanyiung.quantguard.marketdata.provider.MarketDataProviderErrorType;
 import com.vanyiung.quantguard.marketdata.provider.MarketDataProviderException;
+import com.vanyiung.quantguard.marketdata.provider.ProviderInstrumentMetadata;
+import com.vanyiung.quantguard.marketdata.provider.ProviderInstrumentType;
+import com.vanyiung.quantguard.marketdata.symbol.MarketSymbol;
 import com.vanyiung.quantguard.marketdata.symbol.MarketSymbolParser;
 import com.vanyiung.quantguard.service.impl.MarketDataServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,6 +69,35 @@ class MarketDataServiceImplTest {
         properties.setDefaultStartDate(LocalDate.of(2020, 1, 1));
         marketDataService = new MarketDataServiceImpl(securityInstrumentMapper, dailyPriceMapper,
                 syncLogMapper, marketDataProvider, properties, new MarketSymbolParser());
+    }
+
+    @Test
+    void searchCatalogReturnsDisambiguatedIndexAndStockResults() {
+        ProviderInstrumentMetadata index = new ProviderInstrumentMetadata(
+                new MarketSymbol("000688", Exchange.SSE),
+                "科创50",
+                Exchange.SSE,
+                "CNY",
+                "L",
+                null,
+                ProviderInstrumentType.INDEX);
+        ProviderInstrumentMetadata stock = new ProviderInstrumentMetadata(
+                new MarketSymbol("000688", Exchange.SZSE),
+                "国城矿业",
+                Exchange.SZSE,
+                "CNY",
+                "L",
+                LocalDate.of(1997, 1, 20),
+                ProviderInstrumentType.STOCK);
+        when(marketDataProvider.searchInstruments("000688", 20)).thenReturn(List.of(index, stock));
+        when(securityInstrumentMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+
+        List<InstrumentCatalogItem> results = marketDataService.searchInstrumentCatalog("000688", 20);
+
+        assertEquals(List.of("000688.SH", "000688.SZ"),
+                results.stream().map(InstrumentCatalogItem::canonicalCode).toList());
+        assertEquals(List.of(AssetType.INDEX, AssetType.STOCK),
+                results.stream().map(InstrumentCatalogItem::assetType).toList());
     }
 
     @Test
@@ -113,6 +146,84 @@ class MarketDataServiceImplTest {
         assertEquals(Exchange.SSE, instrument.getExchange());
         assertEquals("600519.SH", instrument.getInstrumentName());
         assertEquals(InstrumentStatus.ACTIVE, instrument.getStatus());
+    }
+
+    @Test
+    void importCreatesEtfWhenProviderMetadataIdentifiesEtf() {
+        ProviderInstrumentMetadata metadata = new ProviderInstrumentMetadata(
+                new MarketSymbol("510300", Exchange.SSE),
+                "沪深300ETF",
+                Exchange.SSE,
+                "CNY",
+                "L",
+                LocalDate.of(2012, 5, 28),
+                ProviderInstrumentType.ETF);
+        when(marketDataProvider.lookupInstruments(any())).thenReturn(List.of(metadata));
+        when(securityInstrumentMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+        when(securityInstrumentMapper.insert(any(SecurityInstrument.class))).thenAnswer(invocation -> {
+            SecurityInstrument instrument = invocation.getArgument(0);
+            instrument.setId(10L);
+            return 1;
+        });
+        when(dailyPriceMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+
+        List<InstrumentImportResult> results = marketDataService.importInstruments(
+                new ImportInstrumentsRequest(List.of("510300.SH"), false, null));
+
+        assertEquals("CREATED", results.getFirst().action());
+        ArgumentCaptor<SecurityInstrument> captor = ArgumentCaptor.forClass(SecurityInstrument.class);
+        verify(securityInstrumentMapper).insert(captor.capture());
+        assertEquals(AssetType.ETF, captor.getValue().getAssetType());
+        assertEquals("沪深300ETF", captor.getValue().getInstrumentName());
+    }
+
+    @Test
+    void importCreatesReadOnlyIndexWithUnitLotSize() {
+        ProviderInstrumentMetadata metadata = new ProviderInstrumentMetadata(
+                new MarketSymbol("000688", Exchange.SSE),
+                "科创50",
+                Exchange.SSE,
+                "CNY",
+                "L",
+                null,
+                ProviderInstrumentType.INDEX);
+        when(marketDataProvider.lookupInstruments(any())).thenReturn(List.of(metadata));
+        when(securityInstrumentMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+        when(securityInstrumentMapper.insert(any(SecurityInstrument.class))).thenAnswer(invocation -> {
+            SecurityInstrument instrument = invocation.getArgument(0);
+            instrument.setId(11L);
+            return 1;
+        });
+        when(dailyPriceMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+
+        marketDataService.importInstruments(
+                new ImportInstrumentsRequest(List.of("000688.SH"), false, null));
+
+        ArgumentCaptor<SecurityInstrument> captor = ArgumentCaptor.forClass(SecurityInstrument.class);
+        verify(securityInstrumentMapper).insert(captor.capture());
+        assertEquals(AssetType.INDEX, captor.getValue().getAssetType());
+        assertEquals(0, captor.getValue().getLotSize().compareTo(new java.math.BigDecimal("1")));
+    }
+
+    @Test
+    void previewRejectsUnknownProviderInstrumentType() {
+        ProviderInstrumentMetadata metadata = new ProviderInstrumentMetadata(
+                new MarketSymbol("000001", Exchange.SZSE),
+                "Unknown instrument",
+                Exchange.SZSE,
+                "CNY",
+                "L",
+                null,
+                ProviderInstrumentType.UNKNOWN);
+        when(marketDataProvider.lookupInstruments(any())).thenReturn(List.of(metadata));
+        when(securityInstrumentMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+
+        InstrumentImportPreviewItem item = marketDataService.previewImport(
+                new InstrumentImportPreviewRequest(List.of("000001.SZ"))).getFirst();
+
+        assertEquals(false, item.valid());
+        assertNull(item.assetType());
+        assertTrue(item.message().contains("UNKNOWN"));
     }
 
     @Test

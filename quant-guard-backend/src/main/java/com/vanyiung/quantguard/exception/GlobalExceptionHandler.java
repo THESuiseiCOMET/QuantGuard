@@ -1,6 +1,7 @@
 package com.vanyiung.quantguard.exception;
 
 import com.vanyiung.quantguard.common.ApiResponse;
+import com.vanyiung.quantguard.marketdata.provider.MarketDataProviderException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -58,6 +59,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
         return ResponseEntity.badRequest().body(ApiResponse.failure("Invalid path parameter: " + ex.getName()));
+    }
+
+    @ExceptionHandler(MarketDataProviderException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMarketDataProvider(MarketDataProviderException ex) {
+        HttpStatus status = switch (ex.errorType()) {
+            case TIMEOUT -> HttpStatus.GATEWAY_TIMEOUT;
+            case RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;
+            case PERMISSION_DENIED -> HttpStatus.FORBIDDEN;
+            case INVALID_SYMBOL -> HttpStatus.BAD_REQUEST;
+            case INSTRUMENT_NOT_FOUND, NO_DATA -> HttpStatus.NOT_FOUND;
+            case UNSUPPORTED_INSTRUMENT_TYPE -> HttpStatus.UNPROCESSABLE_CONTENT;
+            case NOT_CONFIGURED, NETWORK_ERROR, UPSTREAM_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+            case INVALID_RESPONSE, UPSTREAM_INVALID_RESPONSE, PARTIAL_FAILURE -> HttpStatus.BAD_GATEWAY;
+        };
+        return ResponseEntity.status(status).body(ApiResponse.failure(ex.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)

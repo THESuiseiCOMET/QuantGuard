@@ -86,7 +86,8 @@ public class TushareMarketDataProvider implements MarketDataProvider {
                 exchangeFromProvider(text(item, index, "exchange")),
                 currencyFromProvider(text(item, index, "curr_type")),
                 text(item, index, "list_status"),
-                parseOptionalDate(text(item, index, "list_date"))
+                parseOptionalDate(text(item, index, "list_date")),
+                ProviderInstrumentType.STOCK
         );
     }
 

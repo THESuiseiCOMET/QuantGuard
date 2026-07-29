@@ -7,12 +7,19 @@ import type {
   DailyPriceSyncRequest,
   DailyPriceSyncResult,
   ImportInstrumentsRequest,
+  InstrumentCatalogItem,
   ImportPreviewItem,
   InstrumentImportPreviewRequest,
   InstrumentImportResult,
   MarketDataProviderConfig,
   UpdateMarketDataProviderConfigRequest,
 } from '@/types/marketData'
+
+export function searchInstrumentCatalog(query: string, limit = 20) {
+  return http.get('/instruments/catalog/search', {
+    params: { query, limit },
+  }) as Promise<InstrumentCatalogItem[]>
+}
 
 export function previewInstrumentImport(request: InstrumentImportPreviewRequest) {
   return http.post('/instruments/import/preview', request) as Promise<ImportPreviewItem[]>

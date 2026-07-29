@@ -1,6 +1,18 @@
 name: QuantGuard Backend Integration CI
 
 on:
+  push:
+    branches:
+      - main
+      - "release/**"
+    paths:
+      - "quant-guard-backend/**"
+      - ".github/workflows/backend-integration-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "quant-guard-backend/**"
+      - ".github/workflows/backend-integration-ci.yml"
   workflow_dispatch:
 
 permissions:
@@ -54,19 +66,37 @@ jobs:
 
           total_tests = 0
           total_skipped = 0
+          migration_suite = None
           for report in reports:
               root = ET.parse(report).getroot()
               total_tests += int(root.attrib.get("tests", "0"))
               total_skipped += int(root.attrib.get("skipped", "0"))
+              if root.attrib.get("name", "").endswith(".MarketDataSchemaMigrationIT"):
+                  migration_suite = root
 
           print(f"Integration tests run: {total_tests}")
           print(f"Integration tests skipped: {total_skipped}")
 
-          if total_tests < 6:
-              print("Expected at least 6 integration tests.")
+          if total_tests < 9:
+              print("Expected at least 9 integration tests.")
               sys.exit(1)
           if total_skipped != 0:
               print("Integration tests must not be skipped in GitHub Actions.")
+              sys.exit(1)
+
+          if migration_suite is None:
+              print("MarketDataSchemaMigrationIT report was not produced.")
+              sys.exit(1)
+
+          migration_tests = int(migration_suite.attrib.get("tests", "0"))
+          migration_skipped = int(migration_suite.attrib.get("skipped", "0"))
+          migration_failures = int(migration_suite.attrib.get("failures", "0"))
+          migration_errors = int(migration_suite.attrib.get("errors", "0"))
+          print(f"MarketDataSchemaMigrationIT tests run: {migration_tests}")
+          print(f"MarketDataSchemaMigrationIT tests skipped: {migration_skipped}")
+
+          if (migration_tests, migration_skipped, migration_failures, migration_errors) != (3, 0, 0, 0):
+              print("Expected all 3 V7/V8 migration tests to execute and pass.")
               sys.exit(1)
           PY
 

@@ -17,7 +17,16 @@ coverage/
 .vite/
 **/.vite/
 
+# Python
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+**/.pytest_cache/
+
 # Local environment
+.venv/
+**/.venv/
 .env
 .env.*
 !.env.example
@@ -29,6 +38,7 @@ application-local.yml
 *.local
 
 # Logs and reports
+.runtime/
 logs/
 **/logs/
 *.log

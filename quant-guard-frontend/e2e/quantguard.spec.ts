@@ -15,6 +15,103 @@ type AccountRow = {
 
 const timestamp = '2026-07-25T12:00:00'
 
+test('证券目录可以按代码搜索并区分同码指数和股票', async ({ page }) => {
+  await page.route('**/api/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname
+    if (!pathname.startsWith('/api/')) return route.continue()
+    if (pathname === '/api/instruments') return fulfill(route, [])
+    if (pathname === '/api/instruments/catalog/search') {
+      return fulfill(route, [
+        {
+          canonicalCode: '000688.SH',
+          symbol: '000688',
+          instrumentName: '科创50',
+          exchange: 'SSE',
+          assetType: 'INDEX',
+          currency: 'CNY',
+          listStatus: 'L',
+          listDate: null,
+          alreadyExists: false,
+          existingInstrumentId: null,
+        },
+        {
+          canonicalCode: '000688.SZ',
+          symbol: '000688',
+          instrumentName: '国城矿业',
+          exchange: 'SZSE',
+          assetType: 'STOCK',
+          currency: 'CNY',
+          listStatus: 'L',
+          listDate: '1997-01-20',
+          alreadyExists: false,
+          existingInstrumentId: null,
+        },
+      ])
+    }
+    return fulfill(route, [])
+  })
+
+  await page.goto('/market-data')
+  await page.getByRole('button', { name: '添加证券' }).click()
+  await page
+    .getByRole('dialog', { name: '添加证券' })
+    .getByRole('combobox', { name: '按代码或名称搜索' })
+    .fill('000688')
+
+  const dropdown = page.locator('.el-select-dropdown:visible')
+  await expect(dropdown.getByText('科创50', { exact: true })).toBeVisible()
+  await expect(dropdown.getByText('000688.SH · 上交所 · 指数', { exact: true })).toBeVisible()
+  await expect(dropdown.getByText('国城矿业', { exact: true })).toBeVisible()
+  await expect(dropdown.getByText('000688.SZ · 深交所 · 股票', { exact: true })).toBeVisible()
+})
+
+test('证券目录无匹配结果时显示明确空状态', async ({ page }) => {
+  await page.route('**/api/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname
+    if (!pathname.startsWith('/api/')) return route.continue()
+    return fulfill(route, [])
+  })
+
+  await page.goto('/market-data')
+  await page.getByRole('button', { name: '添加证券' }).click()
+  await page
+    .getByRole('dialog', { name: '添加证券' })
+    .getByRole('combobox', { name: '按代码或名称搜索' })
+    .fill('不存在的证券')
+
+  await expect(page.locator('.el-select-dropdown:visible')).toContainText('未找到匹配的证券')
+})
+
+test('证券目录服务不可达时显示可操作错误', async ({ page }) => {
+  await page.route('**/api/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname
+    if (!pathname.startsWith('/api/')) return route.continue()
+    if (pathname === '/api/instruments/catalog/search') {
+      return route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: false,
+          data: null,
+          message: 'Python market data service is unavailable',
+        }),
+      })
+    }
+    return fulfill(route, [])
+  })
+
+  await page.goto('/market-data')
+  await page.getByRole('button', { name: '添加证券' }).click()
+  await page
+    .getByRole('dialog', { name: '添加证券' })
+    .getByRole('combobox', { name: '按代码或名称搜索' })
+    .fill('600519')
+
+  await expect(page.locator('.el-select-dropdown:visible')).toContainText(
+    '行情服务不可用，请确认 Python 行情服务已启动',
+  )
+})
+
 test('K 线可视区变化会进入自定义区间并更新范围高低价', async ({ page }) => {
   const prices = createDailyPrices(320)
   await mockMarketApi(page, prices)

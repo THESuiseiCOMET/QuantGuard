@@ -108,19 +108,11 @@
 
           <div class="order-input-grid">
             <el-form-item label="数量" prop="requestedQuantity">
-              <el-input
-                v-model.trim="form.requestedQuantity"
-                inputmode="decimal"
-                placeholder="例如：100"
-              />
+              <el-input v-model.trim="form.requestedQuantity" inputmode="decimal" />
             </el-form-item>
 
             <el-form-item label="单价" prop="limitPrice">
-              <el-input
-                v-model.trim="form.limitPrice"
-                inputmode="decimal"
-                placeholder="例如：10.5000"
-              />
+              <el-input v-model.trim="form.limitPrice" inputmode="decimal" />
             </el-form-item>
           </div>
 
@@ -400,7 +392,9 @@ const currentAccount = computed(() =>
   accounts.value.find((account) => account.id === selectedAccountId.value),
 )
 const activeInstruments = computed(() =>
-  instruments.value.filter((instrument) => instrument.status === 'ACTIVE'),
+  instruments.value.filter(
+    (instrument) => instrument.status === 'ACTIVE' && instrument.assetType !== 'INDEX',
+  ),
 )
 const selectedInstrument = computed(() =>
   activeInstruments.value.find((instrument) => instrument.id === form.instrumentId),
@@ -920,6 +914,7 @@ function assetTypeLabel(type: AssetType) {
   const labels: Record<AssetType, string> = {
     STOCK: '股票',
     ETF: 'ETF',
+    INDEX: '指数',
   }
   return labels[type]
 }

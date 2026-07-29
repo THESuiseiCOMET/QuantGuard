@@ -12,6 +12,7 @@ import com.vanyiung.quantguard.entity.SimulationAccount;
 import com.vanyiung.quantguard.enums.AccountStatus;
 import com.vanyiung.quantguard.enums.CashLedgerEntryType;
 import com.vanyiung.quantguard.enums.InstrumentStatus;
+import com.vanyiung.quantguard.enums.AssetType;
 import com.vanyiung.quantguard.enums.OrderSide;
 import com.vanyiung.quantguard.enums.OrderStatus;
 import com.vanyiung.quantguard.enums.OrderType;
@@ -188,6 +189,9 @@ public class SimulatedOrderServiceImpl implements SimulatedOrderService {
         }
         if (instrument.getStatus() != InstrumentStatus.ACTIVE) {
             throw new BusinessRuleException("Security instrument is not active");
+        }
+        if (instrument.getAssetType() == AssetType.INDEX) {
+            throw new BusinessRuleException("Index instruments are read-only and cannot be traded");
         }
         return instrument;
     }

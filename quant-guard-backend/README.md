@@ -27,6 +27,42 @@ QuantGuard（智衡量化交易与风控系统）后端是一个本地自用的 
 - 技术指标；
 - 高频交易。
 
+## 运行模式
+
+后端保留两种互不替代的运行方式：
+
+- 默认/MySQL 模式：继续使用现有 MySQL 配置和手动 V1-V8 迁移，Flyway 默认关闭；
+- `desktop` Profile：使用 H2 File，不依赖 MySQL，并通过独立 Flyway 基线自动初始化。
+
+桌面模式默认将文件写入：
+
+```text
+%APPDATA%\QuantGuard\
+├─ data\
+├─ logs\
+├─ config\
+└─ runtime\
+```
+
+可以使用 `QUANTGUARD_DATA_DIR` 覆盖根目录。路径解析优先使用该变量，其次使用 Windows `APPDATA`，最后安全降级到用户目录。数据库文件位于 `data\quantguard.mv.db`，日志滚动写入 `logs\`。不要将用户数据放入仓库或程序安装目录。
+
+桌面模式手动启动：
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE="desktop"
+$env:QUANTGUARD_DATA_DIR="C:\path\to\your\data"
+.\mvnw.cmd spring-boot:run
+```
+
+也可以从仓库根目录启动 Python、后端和前端：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1 -Desktop
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-dev.ps1 -Desktop
+```
+
+当前只是浏览器开发模式的桌面运行底座，不包含 Tauri、Java Runtime、Python 可执行文件或 Windows 安装包。
+
 ## 本地数据库初始化
 
 后端使用本地 MySQL 数据库：
@@ -47,7 +83,7 @@ source src/main/resources/db/create_database.sql;
 
 ### 2. 按顺序执行迁移脚本
 
-当前项目暂未启用 Flyway，所以 `src/main/resources/db/migration/` 下的 SQL 是“手动执行、纳入 Git 管理”的版本化脚本。
+默认/MySQL 模式不启用 Flyway，所以 `src/main/resources/db/migration/` 下的 SQL 是“手动执行、纳入 Git 管理”的版本化脚本。`desktop` Profile 使用独立的 `src/main/resources/db/desktop-migration/`，不会自动修改现有 MySQL 数据库。
 
 请按顺序执行：
 
@@ -379,7 +415,7 @@ SELL 成交：
 .\mvnw.cmd clean test
 ```
 
-该命令只运行不依赖真实 MySQL 的单元测试和 Web 层测试。
+该命令运行单元测试、Web 层测试，以及不依赖 Docker 的 H2 desktop 首次启动、重启持久化和核心业务兼容测试。
 
 Testcontainers MySQL 集成测试命令：
 
@@ -435,6 +471,32 @@ The current scope excludes:
 - technical indicators;
 - high-frequency trading.
 
+## Runtime Modes
+
+The backend keeps two independent runtime modes:
+
+- default/MySQL mode: keeps the existing MySQL configuration and manual V1-V8 migrations, with Flyway disabled;
+- `desktop` Profile: uses H2 File without MySQL and initializes through a separate Flyway baseline.
+
+Desktop files default to `%APPDATA%\QuantGuard\`, under `data`, `logs`, `config`, and `runtime`. Override the root with `QUANTGUARD_DATA_DIR`; when `APPDATA` is unavailable, the resolver safely falls back to the user home directory. The database is stored as `data\quantguard.mv.db`, and rolling logs live under `logs`. User data should not be stored in the repository or installation directory.
+
+Manual desktop startup:
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE="desktop"
+$env:QUANTGUARD_DATA_DIR="C:\path\to\your\data"
+.\mvnw.cmd spring-boot:run
+```
+
+Start and stop the full browser-based development stack from the repository root:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1 -Desktop
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-dev.ps1 -Desktop
+```
+
+This is a desktop runtime foundation, not yet a Tauri client, bundled Java/Python runtime, or Windows installer.
+
 ## Local Database Initialization
 
 The backend uses a local MySQL database:
@@ -455,7 +517,7 @@ If the MySQL client is not opened from the project root, use the full path to th
 
 ### 2. Run Migration Scripts In Order
 
-Flyway is not enabled yet. SQL files under `src/main/resources/db/migration/` are versioned, Git-managed scripts that must be executed manually.
+Flyway remains disabled in default/MySQL mode. SQL files under `src/main/resources/db/migration/` are versioned, Git-managed scripts that must be executed manually. The `desktop` Profile uses the separate `src/main/resources/db/desktop-migration/` location and does not automatically alter existing MySQL databases.
 
 Run them in order:
 
@@ -787,7 +849,7 @@ Regular command:
 .\mvnw.cmd clean test
 ```
 
-This command only runs unit tests and web-layer tests that do not depend on real MySQL.
+This command runs unit tests, web-layer tests, and non-Docker H2 desktop tests for first startup, restart persistence, and core business compatibility.
 
 Testcontainers MySQL integration test command:
 

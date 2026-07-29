@@ -10,6 +10,10 @@ export const http = axios.create({
   timeout: 10_000,
 })
 
+export function setApiBaseURL(backendBaseURL: string) {
+  http.defaults.baseURL = `${backendBaseURL.replace(/\/+$/, '')}/api`
+}
+
 http.interceptors.response.use(
   (response) => {
     const body = response.data as ApiResponse<unknown>

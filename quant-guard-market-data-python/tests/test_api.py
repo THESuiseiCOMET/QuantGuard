@@ -72,3 +72,56 @@ def test_invalid_request_does_not_expose_stack_trace() -> None:
         "message": "Invalid market-data request",
     }
     assert "traceback" not in response.text.lower()
+
+
+def test_desktop_shutdown_requires_matching_token_and_loopback(monkeypatch) -> None:
+    requested = []
+    monkeypatch.setenv("QUANTGUARD_DESKTOP_SHUTDOWN_TOKEN", "desktop-secret")
+    monkeypatch.setattr(
+        main_module.app.state,
+        "request_desktop_shutdown",
+        lambda: requested.append(True),
+        raising=False,
+    )
+    client = TestClient(
+        main_module.app,
+        raise_server_exceptions=False,
+        client=("127.0.0.1", 51000),
+    )
+
+    forbidden = client.post(
+        "/internal/desktop/shutdown",
+        headers={"X-QuantGuard-Shutdown-Token": "wrong"},
+    )
+    accepted = client.post(
+        "/internal/desktop/shutdown",
+        headers={"X-QuantGuard-Shutdown-Token": "desktop-secret"},
+    )
+    remote_client = TestClient(
+        main_module.app,
+        raise_server_exceptions=False,
+        client=("192.0.2.10", 51000),
+    )
+    remote = remote_client.post(
+        "/internal/desktop/shutdown",
+        headers={"X-QuantGuard-Shutdown-Token": "desktop-secret"},
+    )
+
+    assert forbidden.status_code == 403
+    assert remote.status_code == 403
+    assert accepted.status_code == 202
+    assert accepted.json() == {"status": "STOPPING"}
+    assert requested == [True]
+
+
+def test_desktop_shutdown_is_hidden_without_token(monkeypatch) -> None:
+    monkeypatch.delenv("QUANTGUARD_DESKTOP_SHUTDOWN_TOKEN", raising=False)
+    client = TestClient(
+        main_module.app,
+        raise_server_exceptions=False,
+        client=("127.0.0.1", 51000),
+    )
+
+    response = client.post("/internal/desktop/shutdown")
+
+    assert response.status_code == 404

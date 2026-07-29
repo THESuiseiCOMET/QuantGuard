@@ -1,0 +1,108 @@
+name: QuantGuard Windows Desktop CI
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+      - "feature/**"
+    paths:
+      - "quant-guard-frontend/**"
+      - "quant-guard-market-data-python/**"
+      - "quant-guard-backend/**"
+      - "scripts/build-*-runtime.ps1"
+      - "scripts/build-desktop-runtimes.ps1"
+      - "scripts/build-tauri-desktop.ps1"
+      - "scripts/stage-tauri-runtimes.ps1"
+      - "scripts/test-desktop-runtimes.ps1"
+      - "scripts/test-tauri-lifecycle.ps1"
+      - "scripts/runtime-build-common.ps1"
+      - ".github/workflows/windows-desktop-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "quant-guard-frontend/**"
+      - "quant-guard-market-data-python/**"
+      - "quant-guard-backend/**"
+      - "scripts/**"
+      - ".github/workflows/windows-desktop-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-desktop-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: quant-guard-frontend/package-lock.json
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            quant-guard-market-data-python/requirements.txt
+            quant-guard-market-data-python/requirements-build.txt
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: quant-guard-backend/pom.xml
+
+      - name: Set up stable Rust
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustc -V
+          cargo -V
+
+      - name: Prepare Python build environment
+        shell: pwsh
+        run: |
+          python -m venv quant-guard-market-data-python/.venv
+          & quant-guard-market-data-python/.venv/Scripts/python.exe -m pip install --upgrade pip
+          & quant-guard-market-data-python/.venv/Scripts/python.exe -m pip install `
+            -r quant-guard-market-data-python/requirements.txt `
+            -r quant-guard-market-data-python/requirements-build.txt
+
+      - name: Install frontend dependencies
+        working-directory: quant-guard-frontend
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        working-directory: quant-guard-frontend
+        run: npx playwright install chromium
+
+      - name: Build and verify Tauri desktop application
+        shell: pwsh
+        run: ./scripts/build-tauri-desktop.ps1
+
+      - name: Upload internal Windows installer and smoke logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: quantguard-windows-desktop-internal
+          path: |
+            quant-guard-frontend/src-tauri/target/release/bundle/nsis/*-setup.exe
+            quant-guard-frontend/src-tauri/target/desktop-lifecycle-smoke/**/*.log
+          if-no-files-found: error
+          retention-days: 7

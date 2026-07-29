@@ -1,0 +1,6 @@
+dist/
+playwright-report/
+test-results/
+src-tauri/gen/
+src-tauri/runtime-staging/
+src-tauri/target/

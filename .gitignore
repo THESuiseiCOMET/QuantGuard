@@ -16,6 +16,8 @@ coverage/
 **/coverage/
 .vite/
 **/.vite/
+quant-guard-frontend/src-tauri/runtime-staging/
+quant-guard-frontend/src-tauri/target/
 
 # Python
 __pycache__/
@@ -80,3 +82,5 @@ secrets/
 *.key
 *.p12
 *.jks
+*.msi
+*-setup.exe

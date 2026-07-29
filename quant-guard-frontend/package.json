@@ -9,13 +9,19 @@
     "type-check": "vue-tsc -b",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test:e2e": "playwright test",
     "test": "npm run test:e2e",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "desktop:stage": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File ../scripts/stage-tauri-runtimes.ps1",
+    "tauri": "tauri",
+    "tauri:dev": "npm run desktop:stage && tauri dev",
+    "tauri:build": "npm run desktop:stage && tauri build --bundles nsis"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "@lucide/vue": "^1.26.0",
+    "@tauri-apps/api": "2.11.1",
     "axios": "^1.18.1",
     "echarts": "^6.1.0",
     "element-plus": "^2.14.3",
@@ -26,6 +32,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.0",
+    "@tauri-apps/cli": "2.11.4",
     "@types/node": "^24.13.2",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vue/tsconfig": "^0.9.1",

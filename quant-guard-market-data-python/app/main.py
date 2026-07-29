@@ -1,6 +1,9 @@
 from importlib.metadata import PackageNotFoundError, version
+import ipaddress
+import os
+import secrets
 
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -43,6 +46,39 @@ def search_instruments(request: InstrumentSearchRequest) -> InstrumentSearchResp
 @app.post("/v1/daily-bars", response_model=DailyBarsResponse)
 def daily_bars(request: DailyBarsRequest) -> DailyBarsResponse:
     return service.daily_bars(request.symbols, request.start_date, request.end_date)
+
+
+@app.post("/internal/desktop/shutdown", status_code=202, include_in_schema=False)
+def desktop_shutdown(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    shutdown_token: str | None = Header(
+        default=None,
+        alias="X-QuantGuard-Shutdown-Token",
+    ),
+) -> dict[str, str]:
+    expected_token = os.getenv("QUANTGUARD_DESKTOP_SHUTDOWN_TOKEN", "")
+    client_host = request.client.host if request.client else ""
+    if not expected_token:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    try:
+        is_loopback = ipaddress.ip_address(client_host).is_loopback
+    except ValueError:
+        is_loopback = False
+    if (
+        not is_loopback
+        or shutdown_token is None
+        or not secrets.compare_digest(shutdown_token, expected_token)
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
+    shutdown_callback = getattr(app.state, "request_desktop_shutdown", None)
+    if not callable(shutdown_callback):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Desktop shutdown is unavailable",
+        )
+    background_tasks.add_task(shutdown_callback)
+    return {"status": "STOPPING"}
 
 
 @app.exception_handler(RequestValidationError)

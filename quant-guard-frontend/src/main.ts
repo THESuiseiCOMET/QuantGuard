@@ -4,6 +4,7 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import 'element-plus/theme-chalk/dark/css-vars.css'
 import App from './App.vue'
+import { initializeDesktopRuntime } from './desktop/runtime'
 import { router } from './router'
 import './styles/global.css'
 
@@ -14,3 +15,5 @@ app.use(router)
 app.use(ElementPlus)
 
 app.mount('#app')
+
+void initializeDesktopRuntime()

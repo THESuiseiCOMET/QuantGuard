@@ -5,7 +5,13 @@ import vue from 'eslint-plugin-vue'
 
 export default tseslint.config(
   {
-    ignores: ['dist', 'node_modules'],
+    ignores: [
+      'dist',
+      'node_modules',
+      'src-tauri/gen',
+      'src-tauri/runtime-staging',
+      'src-tauri/target',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

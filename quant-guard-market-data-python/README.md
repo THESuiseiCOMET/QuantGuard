@@ -26,6 +26,15 @@ py -3.11 -m venv .venv
 
 BaoStock uses process-wide session state, so the first version must run with one worker.
 
+The stable CLI entry point supports loopback-only hosting, an explicit port, rotating JSON logs, and version output:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.cli --host 127.0.0.1 --port 8001 --log-dir .\.runtime\logs
+.\.venv\Scripts\python.exe -m app.cli --version
+```
+
+Non-loopback addresses are rejected. The packaged runtime keeps one worker because BaoStock uses process-wide session state.
+
 From the monorepo root, the Windows development helper starts this service, Spring Boot, and Vue together:
 
 ```powershell
@@ -61,3 +70,27 @@ Manual network smoke tests are opt-in:
 $env:RUN_MARKET_DATA_SMOKE="1"
 .\.venv\Scripts\python.exe -m pytest -m live -s
 ```
+
+## Windows onedir runtime
+
+Install the locked build-only dependency into the existing virtual environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
+```
+
+Build from the monorepo root:
+
+```powershell
+.\scripts\build-python-runtime.ps1
+```
+
+The maintained `quantguard-market-data.spec` produces:
+
+```text
+dist\desktop-runtime\market-data\
+├─ quantguard-market-data.exe
+└─ PyInstaller dependencies
+```
+
+The runtime does not read `.venv`, source files, or desktop PoC paths. It remains a console-enabled `onedir` build for diagnosability and is not a Windows installer.

@@ -17,6 +17,7 @@ on:
       - "scripts/test-desktop-runtimes.ps1"
       - "scripts/test-tauri-lifecycle.ps1"
       - "scripts/runtime-build-common.ps1"
+      - ".gitattributes"
       - ".github/workflows/windows-desktop-ci.yml"
   pull_request:
     branches: [main]
@@ -25,6 +26,7 @@ on:
       - "quant-guard-market-data-python/**"
       - "quant-guard-backend/**"
       - "scripts/**"
+      - ".gitattributes"
       - ".github/workflows/windows-desktop-ci.yml"
   workflow_dispatch:
 

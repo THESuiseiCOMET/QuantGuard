@@ -30,6 +30,9 @@ def main(arguments: Sequence[str] | None = None) -> int:
             workers=1,
             log_config=log_config,
         )
+        logging.getLogger(__name__).info(
+            "QuantGuard market-data service %s starting", __version__
+        )
         server = uvicorn.Server(config)
         app.state.request_desktop_shutdown = lambda: setattr(server, "should_exit", True)
         server.run()

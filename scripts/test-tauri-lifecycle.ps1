@@ -79,13 +79,20 @@ function Invoke-LifecycleScenario {
     if (-not $process.Start()) {
         throw "Tauri lifecycle scenario '$Name' could not start."
     }
-    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-        $process.Kill()
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $timedOut = -not $process.WaitForExit($TimeoutSeconds * 1000)
+    if ($timedOut) {
+        $process.Kill($true)
         $process.WaitForExit()
+    }
+    $stdoutTask.GetAwaiter().GetResult() |
+        Set-Content -LiteralPath $stdoutPath -Encoding UTF8
+    $stderrTask.GetAwaiter().GetResult() |
+        Set-Content -LiteralPath $stderrPath -Encoding UTF8
+    if ($timedOut) {
         throw "Tauri lifecycle scenario '$Name' timed out after $TimeoutSeconds seconds."
     }
-    $process.StandardOutput.ReadToEnd() | Set-Content -LiteralPath $stdoutPath -Encoding UTF8
-    $process.StandardError.ReadToEnd() | Set-Content -LiteralPath $stderrPath -Encoding UTF8
     $exitCode = $process.ExitCode
     if ($exitCode -ne 0) {
         $stderr = if (Test-Path -LiteralPath $stderrPath) {

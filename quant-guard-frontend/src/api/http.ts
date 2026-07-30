@@ -2,13 +2,24 @@ import axios, { AxiosError } from 'axios'
 import { ElMessage } from 'element-plus'
 import type { ApiResponse } from '@/types/api'
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+const defaultBaseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+const baseURL = import.meta.hot?.data.apiBaseURL || defaultBaseURL
 let lastMessage = ''
 
 export const http = axios.create({
   baseURL,
   timeout: 10_000,
 })
+
+export function setApiBaseURL(backendBaseURL: string) {
+  http.defaults.baseURL = `${backendBaseURL.replace(/\/+$/, '')}/api`
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose((data) => {
+    data.apiBaseURL = http.defaults.baseURL || defaultBaseURL
+  })
+}
 
 http.interceptors.response.use(
   (response) => {

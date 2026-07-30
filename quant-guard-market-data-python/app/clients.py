@@ -1,9 +1,11 @@
+import socket
 from dataclasses import dataclass
 from datetime import date
 from threading import Lock
 
 import akshare as ak
 import baostock as bs
+import baostock.common.contants as bs_constants
 import pandas as pd
 
 from app.errors import ErrorCode, MarketDataError
@@ -11,6 +13,7 @@ from app.symbols import CanonicalSymbol
 
 
 _BAOSTOCK_SESSION_LOCK = Lock()
+_BAOSTOCK_CONNECT_TIMEOUT_SECONDS = 3
 
 
 @dataclass(frozen=True)
@@ -35,6 +38,7 @@ class BaoStockClient:
 
     def lookup_instrument(self, symbol: CanonicalSymbol) -> RawInstrumentMetadata:
         with _BAOSTOCK_SESSION_LOCK:
+            self._ensure_available()
             login_result = bs.login()
             try:
                 self._require_success(login_result, "BaoStock login failed", ErrorCode.UPSTREAM_UNAVAILABLE)
@@ -64,6 +68,7 @@ class BaoStockClient:
 
     def list_instruments(self) -> list[CatalogInstrument]:
         with _BAOSTOCK_SESSION_LOCK:
+            self._ensure_available()
             login_result = bs.login()
             try:
                 self._require_success(login_result, "BaoStock login failed", ErrorCode.UPSTREAM_UNAVAILABLE)
@@ -108,6 +113,7 @@ class BaoStockClient:
         end_date: date,
     ) -> pd.DataFrame:
         with _BAOSTOCK_SESSION_LOCK:
+            self._ensure_available()
             login_result = bs.login()
             try:
                 self._require_success(login_result, "BaoStock login failed", ErrorCode.UPSTREAM_UNAVAILABLE)
@@ -139,6 +145,19 @@ class BaoStockClient:
         self._require_success(result, message, ErrorCode.UPSTREAM_INVALID_RESPONSE)
         return rows
 
+    def _ensure_available(self) -> None:
+        try:
+            with socket.create_connection(
+                (bs_constants.BAOSTOCK_SERVER_IP, bs_constants.BAOSTOCK_SERVER_PORT),
+                timeout=_BAOSTOCK_CONNECT_TIMEOUT_SECONDS,
+            ):
+                return
+        except OSError as exc:
+            raise MarketDataError(
+                ErrorCode.UPSTREAM_UNAVAILABLE,
+                "BaoStock service is unreachable",
+            ) from exc
+
     def _require_success(self, result: object, message: str, code: ErrorCode) -> None:
         if getattr(result, "error_code", None) != "0":
             detail = getattr(result, "error_msg", "")
@@ -146,6 +165,65 @@ class BaoStockClient:
 
 
 class AkShareClient:
+    def stock_catalog(self) -> list[CatalogInstrument]:
+        try:
+            frame = ak.stock_info_a_code_name()
+        except Exception as exc:
+            raise MarketDataError(
+                ErrorCode.UPSTREAM_UNAVAILABLE,
+                "AKShare A-share catalog query failed",
+            ) from exc
+        if not isinstance(frame, pd.DataFrame) or not {"code", "name"}.issubset(
+            frame.columns
+        ):
+            raise MarketDataError(
+                ErrorCode.UPSTREAM_INVALID_RESPONSE,
+                "AKShare returned an invalid A-share catalog response",
+            )
+        instruments: list[CatalogInstrument] = []
+        for item in frame.to_dict("records"):
+            code = str(item.get("code") or "").strip()
+            suffix = (
+                "SH"
+                if code.startswith("6")
+                else "SZ"
+                if code.startswith(("0", "3"))
+                else None
+            )
+            if suffix is None:
+                continue
+            try:
+                symbol = CanonicalSymbol.parse(f"{code}.{suffix}")
+            except MarketDataError:
+                continue
+            instruments.append(
+                CatalogInstrument(
+                    symbol=symbol,
+                    metadata=RawInstrumentMetadata(
+                        name=str(item.get("name") or "").strip(),
+                        list_date="",
+                        instrument_type="1",
+                        status="1",
+                    ),
+                )
+            )
+        return instruments
+
+    def stock_daily_bars(self, symbol: CanonicalSymbol) -> pd.DataFrame:
+        try:
+            frame = ak.stock_zh_a_daily(symbol=symbol.sina_code, adjust="")
+        except Exception as exc:
+            raise MarketDataError(
+                ErrorCode.UPSTREAM_UNAVAILABLE,
+                f"AKShare Sina stock query failed for {symbol.canonical}",
+            ) from exc
+        if not isinstance(frame, pd.DataFrame):
+            raise MarketDataError(
+                ErrorCode.UPSTREAM_INVALID_RESPONSE,
+                f"AKShare Sina returned an invalid stock response for {symbol.canonical}",
+            )
+        return frame
+
     def etf_daily_bars(self, symbol: CanonicalSymbol) -> pd.DataFrame:
         try:
             frame = ak.fund_etf_hist_sina(symbol=symbol.sina_code)

@@ -133,18 +133,43 @@ class MarketDataService:
         )
 
     def _lookup_raw(self, symbol: CanonicalSymbol) -> RawInstrumentMetadata:
+        cached_metadata = self._cached_catalog_metadata(symbol)
+        if cached_metadata is not None:
+            return cached_metadata
+
+        primary_error: MarketDataError | None = None
         try:
             return self.baostock.lookup_instrument(symbol)
         except MarketDataError as exc:
-            if exc.code != ErrorCode.INSTRUMENT_NOT_FOUND:
-                raise
+            primary_error = exc
         for item in self._catalog_entries():
             if item.symbol == symbol:
                 return item.metadata
+        if (
+            primary_error is not None
+            and primary_error.code != ErrorCode.INSTRUMENT_NOT_FOUND
+        ):
+            raise primary_error
         raise MarketDataError(
             ErrorCode.INSTRUMENT_NOT_FOUND,
             f"Instrument not found: {symbol.canonical}",
         )
+
+    def _cached_catalog_metadata(
+        self,
+        symbol: CanonicalSymbol,
+    ) -> RawInstrumentMetadata | None:
+        now = monotonic()
+        with self._catalog_lock:
+            if self._catalog_cache is None:
+                return None
+            cached_at, catalog = self._catalog_cache
+            if now - cached_at >= _CATALOG_TTL_SECONDS:
+                return None
+            for item in catalog:
+                if item.symbol == symbol:
+                    return item.metadata
+        return None
 
     def _catalog_entries(self) -> list[CatalogInstrument]:
         now = monotonic()
@@ -154,7 +179,11 @@ class MarketDataService:
 
             merged: dict[str, CatalogInstrument] = {}
             errors: list[MarketDataError] = []
-            for loader in (self.baostock.list_instruments, self.akshare.index_catalog):
+            for loader in (
+                self.baostock.list_instruments,
+                self.akshare.stock_catalog,
+                self.akshare.index_catalog,
+            ):
                 try:
                     for item in loader():
                         merged[item.symbol.canonical] = item
@@ -177,7 +206,19 @@ class MarketDataService:
         start_date: date,
         end_date: date,
     ) -> list[DailyBar]:
-        frame = self.baostock.daily_bars(symbol, start_date, end_date)
+        try:
+            frame = self.baostock.daily_bars(symbol, start_date, end_date)
+        except MarketDataError as exc:
+            if exc.code != ErrorCode.UPSTREAM_UNAVAILABLE:
+                raise
+            frame = self.akshare.stock_daily_bars(symbol)
+            return self._sina_bars(
+                frame,
+                symbol,
+                start_date,
+                end_date,
+                require_amount=True,
+            )
         if frame.empty:
             return []
         required = {"date", "open", "high", "low", "close", "preclose", "volume", "amount"}

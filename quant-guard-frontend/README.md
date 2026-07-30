@@ -15,6 +15,8 @@ QuantGuard Frontend 是 QuantGuard 本地模拟交易与投资组合风控系统
 - Pinia
 - Axios
 - Element Plus
+- Tauri 2
+- Rust
 - ESLint
 - Prettier
 
@@ -58,6 +60,22 @@ npm run dev
 http://localhost:5173
 ```
 
+### Tauri 桌面模式
+
+浏览器开发模式继续使用 `npm run dev` 和 Vite 代理。Tauri 开发模式会先把 V1.2-B 生成的两套运行时复制到临时资源目录，再启动桌面窗口：
+
+```powershell
+npm run tauri:dev
+```
+
+从仓库根目录构建完整的 Windows 内部测试安装包：
+
+```powershell
+.\scripts\build-tauri-desktop.ps1
+```
+
+生产桌面客户端从安装资源目录启动自包含的 Python 行情服务和 Java 后端，不依赖系统 Python、JDK、MySQL 或源码目录。用户数据和日志保存在 `%APPDATA%\QuantGuard\`；运行时 staging、Rust target 和安装包均被 Git 忽略。当前安装包未签名，仅供内部测试。
+
 ### API 配置
 
 前端默认使用：
@@ -80,8 +98,11 @@ http://localhost:8080
 npm run dev
 npm run type-check
 npm run lint
+npm run test:e2e
 npm run build
 npm run preview
+npm run tauri:dev
+npm run tauri:build
 ```
 
 ### CI 验证
@@ -116,6 +137,8 @@ npm run build
 - 资金流水页面，支持按账户读取本地模拟流水、按当前组合前端筛选、映射订单/成交/证券信息、正负资金变动展示、筛选汇总和流水详情；
 - 行情中心页面，支持 A 股代码批量导入预览、确认导入、历史未复权日线同步、证券列表筛选、日 K、成交量、缩放、拖动和详细 tooltip；
 - 账户、投资组合、持仓、风险配置、证券标的、模拟订单、模拟成交和资金流水的类型化 API 封装。
+- Tauri 桌面启动门禁、动态后端地址注入、失败重试和日志目录入口；
+- 浏览器与 Tauri 两种运行模式。
 
 尚未实现：
 
@@ -152,6 +175,8 @@ This frontend is for local simulated trading workflows only. It does not connect
 - Pinia
 - Axios
 - Element Plus
+- Tauri 2
+- Rust
 - ESLint
 - Prettier
 
@@ -195,6 +220,22 @@ Default frontend URL:
 http://localhost:5173
 ```
 
+### Tauri Desktop Mode
+
+Browser development continues to use `npm run dev` and the Vite proxy. Tauri development first stages the two V1.2-B runtime directories, then opens the desktop window:
+
+```powershell
+npm run tauri:dev
+```
+
+Build the complete internal Windows installer from the repository root:
+
+```powershell
+.\scripts\build-tauri-desktop.ps1
+```
+
+The production desktop client launches the bundled Python market-data service and Java backend without relying on system Python, a JDK, MySQL, or the source tree. User data and logs live under `%APPDATA%\QuantGuard\`. Runtime staging, Rust target output, and installers are Git-ignored. The current internal installer is unsigned.
+
 ### API Configuration
 
 The frontend uses:
@@ -217,8 +258,11 @@ Commit `.env.example`. Do not commit real secrets, tokens, cookies, machine-spec
 npm run dev
 npm run type-check
 npm run lint
+npm run test:e2e
 npm run build
 npm run preview
+npm run tauri:dev
+npm run tauri:build
 ```
 
 ### CI Validation
@@ -253,6 +297,8 @@ Implemented:
 - cash ledger records, including account-scoped simulated cash ledger loading, current-portfolio frontend filtering, order/trade/instrument mapping, signed cash delta display, filtered summaries, and ledger details;
 - market data center, including A-share import preview, confirmed import, unadjusted historical daily sync, instrument list filtering, daily candlesticks, volume bars, zooming, panning, and detailed tooltips;
 - typed API shells for accounts, portfolios, positions, risk configuration, security instruments, simulated orders, simulated trades, and cash ledger records.
+- Tauri desktop startup gating, dynamic backend URL injection, failure retry, and log-directory access;
+- both browser and Tauri runtime modes.
 
 Not implemented yet:
 

@@ -112,7 +112,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-dev.ps1
 ```
 
-脚本只用于开发和演示。它不会安装依赖或写入 Token；MySQL 模式的日志和 PID 保存在 `.runtime/`，桌面模式保存在用户数据目录。这仍不是 Tauri 客户端或安装包，前端需要通过浏览器访问。Python、Java Runtime 和 Tauri 的独立打包属于后续阶段。
+这些脚本只用于浏览器开发和演示，不会安装依赖或写入 Token；MySQL 模式的日志和 PID 保存在 `.runtime/`，桌面 Profile 保存在用户数据目录。V1.2-C 另行提供 Tauri 客户端构建，生产客户端不依赖这些开发脚本。
 
 在 monorepo 根目录运行后端测试：
 
@@ -173,7 +173,8 @@ http://localhost:5173
 - 桌面 H2 CI：作为普通后端测试执行，明确校验 6 条桌面路径与持久化测试没有被跳过；
 - 后端集成 CI：后端变更的 push、pull request 和手动触发时，使用 Docker/Testcontainers 运行事务与数据库结构集成测试；
 - Python 行情 CI：Python 行情服务变更时安装锁定版本依赖，运行离线测试和模块编译；
-- 前端 CI：push 和 pull request 时运行 `npm ci`、类型检查、lint、浏览器 E2E 和构建。
+- 前端 CI：push 和 pull request 时运行 `npm ci`、类型检查、lint、浏览器 E2E 和构建；
+- Windows 桌面 CI：构建两套自包含运行时、Tauri 客户端和 NSIS 内部安装包，并执行离线生命周期 smoke test。
 
 ### 项目状态
 
@@ -182,6 +183,14 @@ QuantGuard V1.1 提供本地模拟交易和无 Token 历史行情底座。
 V1.2-A 开发分支新增 Windows 桌面运行底座：后端可通过 H2 File 在没有 MySQL 的环境中持久运行，但尚未生成桌面客户端或安装包。
 
 V1.2-B 开发提供两套 Windows 自包含运行目录：Python 行情服务使用 PyInstaller `onedir`，Spring Boot 后端使用 `jpackage --type app-image` 并携带 Java 21 Runtime。它们用于后续 Tauri sidecar 集成，目前仍不是安装包。
+
+V1.2-C 开发将现有 Vue 界面和两套运行时装入 Tauri 2。客户端负责动态选择本机回环端口、依次启动 Python 与 Java、等待健康检查，并在退出时清理其创建的进程树。构建未签名内部安装包：
+
+```powershell
+.\scripts\build-tauri-desktop.ps1
+```
+
+安装包位于 `quant-guard-frontend\src-tauri\target\release\bundle\nsis\`。默认数据与日志仍保存在 `%APPDATA%\QuantGuard\`，不写入安装目录。当前安装包仅供内部测试，未签名，Windows 可能显示 SmartScreen 提示。
 
 准备好项目虚拟环境中的运行与构建依赖后，可从仓库根目录执行：
 
@@ -214,7 +223,7 @@ desktop-runtime/
 
 后端核心模拟链路已经覆盖模拟账户、投资组合、证券标的、订单、成交、资金流水和风控检查。
 
-V1.1 支持上交所和深交所普通 A 股、ETF 与指数的目录搜索和历史未复权日线。股票与 ETF 可以参与模拟交易，指数仅用于行情展示。证券目录使用六小时进程内缓存：首次加载依赖网络，Python 服务重启后会重新建立缓存，上游不可用时首次搜索可能失败。实时行情、分钟行情、复权行情、自动撮合、回测、策略执行、登录权限、桌面客户端、生产部署和真实券商接入不在当前版本范围。
+V1.1 支持上交所和深交所普通 A 股、ETF 与指数的目录搜索和历史未复权日线。股票与 ETF 可以参与模拟交易，指数仅用于行情展示。证券目录使用六小时进程内缓存：首次加载依赖网络，Python 服务重启后会重新建立缓存，上游不可用时首次搜索可能失败。实时行情、分钟行情、复权行情、自动撮合、回测、策略执行、登录权限、正式签名发布、生产部署和真实券商接入不在当前版本范围。
 
 设置中心提交的 Tushare Token 只保存在当前后端进程内存中，不写入仓库或本地配置文件；后端重启后需要重新配置。
 
@@ -340,7 +349,7 @@ Stop only the processes started by that script:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop-dev.ps1
 ```
 
-The scripts are for development and demos only. They do not install dependencies or write tokens. MySQL-mode logs and PID state use `.runtime/`; desktop mode uses the user data directory. This is not yet a Tauri client or installer, and the frontend still opens in a browser. Packaging Python, Java Runtime, and Tauri belongs to a later phase.
+These scripts are for browser development and demos only. They do not install dependencies or write tokens. MySQL-mode logs and PID state use `.runtime/`; the desktop Profile uses the user data directory. V1.2-C provides a separate Tauri client build, and the production client does not depend on these development scripts.
 
 Prepare and start the token-free single-worker service:
 
@@ -401,7 +410,8 @@ The repository currently includes:
 - desktop H2 CI: runs with regular backend tests and explicitly verifies that all six desktop path and persistence tests executed without skips;
 - backend integration CI: runs Docker/Testcontainers transaction and schema tests for backend changes on push, pull request, or manual dispatch;
 - Python market-data CI: installs pinned dependencies and runs offline tests plus module compilation for Python service changes;
-- frontend CI: runs `npm ci`, type check, lint, browser E2E tests, and build on push and pull request.
+- frontend CI: runs `npm ci`, type check, lint, browser E2E tests, and build on push and pull request;
+- Windows desktop CI: builds both self-contained runtimes, the Tauri client, and an internal NSIS installer, then runs offline lifecycle smoke tests.
 
 ### Project Status
 
@@ -410,6 +420,14 @@ QuantGuard V1.1 provides a local trading simulator with a token-free historical 
 The V1.2-A development branch adds a Windows desktop runtime foundation: the backend can persist with H2 File without MySQL, but no desktop client or installer is produced yet.
 
 V1.2-B development produces two self-contained Windows runtime directories: a PyInstaller `onedir` market-data service and a Spring Boot `jpackage --type app-image` with its Java 21 Runtime. They are inputs for later Tauri sidecar integration, not installers.
+
+V1.2-C development embeds the existing Vue UI and both runtime directories in Tauri 2. The client chooses dynamic loopback ports, starts Python and Java in order, waits for health checks, and cleans up its child process trees on exit. Build the unsigned internal installer with:
+
+```powershell
+.\scripts\build-tauri-desktop.ps1
+```
+
+The installer is written to `quant-guard-frontend\src-tauri\target\release\bundle\nsis\`. Data and logs remain under `%APPDATA%\QuantGuard\`, outside the installation directory. This internal build is not code-signed, so Windows SmartScreen may display a warning.
 
 After preparing the project virtual environment and packaging dependency, build from the repository root:
 

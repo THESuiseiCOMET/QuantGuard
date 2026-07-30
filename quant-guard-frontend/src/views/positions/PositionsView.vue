@@ -1,5 +1,5 @@
 <template>
-  <section class="page">
+  <section class="page" :class="{ 'is-embedded': embedded }">
     <PageHeader
       v-if="!embedded"
       title="持仓收益"
@@ -7,18 +7,18 @@
     />
 
     <el-alert v-if="errorMessage" :title="errorMessage" type="error" :closable="false" />
-    <el-alert
-      v-if="!portfolioStore.selectedPortfolioId"
-      title="请选择一个模拟账户后查看持仓收益。"
-      type="info"
-      :closable="false"
-    />
+    <div v-if="!portfolioStore.selectedPortfolioId" class="portfolio-prompt">
+      选择模拟账户后显示持仓与收益
+    </div>
 
-    <div v-if="embedded" class="embedded-heading">
+    <div v-if="embedded && positions.length > 0" class="embedded-heading">
       <h2>持仓收益</h2>
     </div>
 
-    <div class="surface performance-summary">
+    <div
+      v-if="portfolioStore.selectedPortfolioId && positions.length > 0"
+      class="surface performance-summary"
+    >
       <div class="performance-item primary">
         <span>当前收益金额</span>
         <strong :class="summaryValueClass(totalProfitAmount, true)"
@@ -49,7 +49,7 @@
       </div>
     </div>
 
-    <div v-loading="loading" class="position-card-grid">
+    <div v-if="portfolioStore.selectedPortfolioId" v-loading="loading" class="position-card-grid">
       <div
         v-for="position in positions"
         :key="position.id"
@@ -119,6 +119,12 @@
           </div>
         </div>
       </div>
+    </div>
+    <div
+      v-if="portfolioStore.selectedPortfolioId && !loading && positions.length === 0"
+      class="portfolio-prompt"
+    >
+      当前账户暂无持仓
     </div>
 
     <el-dialog
@@ -446,16 +452,28 @@ function summaryValueClass(value: number, directional = false) {
 </script>
 
 <style scoped>
+.is-embedded {
+  gap: 10px;
+}
+
+.portfolio-prompt {
+  padding: 11px 14px;
+  border: 1px solid var(--qg-border);
+  color: var(--qg-text-muted);
+  background: var(--qg-subtle);
+  font-size: 13px;
+}
+
 .embedded-heading {
   min-width: 0;
-  margin-bottom: 12px;
-  padding-top: 8px;
+  margin-bottom: 0;
+  padding-top: 2px;
   border-top: 1px solid var(--qg-border);
 }
 
 .embedded-heading h2 {
-  margin: 0;
-  font-size: 20px;
+  margin: 12px 0 0;
+  font-size: 16px;
 }
 
 .performance-summary {
@@ -465,12 +483,22 @@ function summaryValueClass(value: number, directional = false) {
   margin-bottom: 12px;
 }
 
+.is-embedded .performance-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+
 .performance-item {
   display: grid;
   gap: 6px;
   min-width: 0;
   padding: 16px;
   border-right: 1px solid var(--qg-border);
+}
+
+.is-embedded .performance-item {
+  gap: 4px;
+  padding: 11px 14px;
 }
 
 .performance-item:last-child {
@@ -494,11 +522,24 @@ function summaryValueClass(value: number, directional = false) {
   font-size: 28px;
 }
 
+.is-embedded .performance-item strong,
+.is-embedded .performance-item.primary strong {
+  font-size: 20px;
+}
+
+.is-embedded .performance-item > small {
+  display: none;
+}
+
 .position-card-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.is-embedded .position-card-grid {
+  margin-bottom: 0;
 }
 
 .position-card {
@@ -621,6 +662,10 @@ function summaryValueClass(value: number, directional = false) {
     grid-template-columns: 1fr 1fr;
   }
 
+  .is-embedded .performance-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .performance-item:nth-child(2) {
     border-right: 0;
   }
@@ -632,6 +677,7 @@ function summaryValueClass(value: number, directional = false) {
 
 @media (max-width: 760px) {
   .performance-summary,
+  .is-embedded .performance-summary,
   .position-card-grid,
   .position-card-metrics,
   .position-card-profit {

@@ -23,6 +23,7 @@ public class PythonMarketDataHttpClient {
     public PythonMarketDataHttpClient(MarketDataProperties properties) {
         this(properties, new ObjectMapper(), HttpClient.newBuilder()
                 .connectTimeout(properties.getPython().getConnectTimeout())
+                .version(HttpClient.Version.HTTP_1_1)
                 .build());
     }
 

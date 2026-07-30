@@ -12,6 +12,9 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    watch: {
+      ignored: ['**/src-tauri/target/**', '**/src-tauri/runtime-staging/**'],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

@@ -65,6 +65,65 @@ test('证券目录可以按代码搜索并区分同码指数和股票', async ({
   await expect(dropdown.getByText('000688.SZ · 深交所 · 股票', { exact: true })).toBeVisible()
 })
 
+test('证券搜索后可以完成导入预览', async ({ page }) => {
+  await page.route('**/api/**', async (route) => {
+    const request = route.request()
+    const pathname = new URL(request.url()).pathname
+    if (!pathname.startsWith('/api/')) return route.continue()
+    if (pathname === '/api/instruments') return fulfill(route, [])
+    if (pathname === '/api/instruments/catalog/search') {
+      return fulfill(route, [
+        {
+          canonicalCode: '600089.SH',
+          symbol: '600089',
+          instrumentName: '特变电工',
+          exchange: 'SSE',
+          assetType: 'STOCK',
+          currency: 'CNY',
+          listStatus: 'L',
+          listDate: '1997-06-18',
+          alreadyExists: false,
+          existingInstrumentId: null,
+        },
+      ])
+    }
+    if (request.method() === 'POST' && pathname === '/api/instruments/import/preview') {
+      expect(request.postDataJSON()).toEqual({ codes: ['600089.SH'] })
+      return fulfill(route, [
+        {
+          originalInput: '600089.SH',
+          canonicalCode: '600089.SH',
+          symbol: '600089',
+          exchange: 'SSE',
+          instrumentName: '特变电工',
+          currency: 'CNY',
+          assetType: 'STOCK',
+          lotSize: '100',
+          listStatus: 'L',
+          listDate: '1997-06-18',
+          alreadyExists: false,
+          existingInstrumentId: null,
+          valid: true,
+          message: 'OK',
+        },
+      ])
+    }
+    return fulfill(route, [])
+  })
+
+  await page.goto('/market-data')
+  await page.getByRole('button', { name: '添加证券' }).click()
+  const dialog = page.getByRole('dialog', { name: '添加证券' })
+  await dialog.getByRole('combobox', { name: '按代码或名称搜索' }).fill('特变')
+  await page.locator('.el-select-dropdown:visible').getByText('特变电工', { exact: true }).click()
+  await dialog.getByRole('button', { name: '检查所选证券' }).click()
+
+  const previewRow = dialog.locator('.el-table__body tr').filter({ hasText: '特变电工' })
+  await expect(previewRow).toContainText('600089.SH')
+  await expect(previewRow).toContainText('通过')
+  await expect(page.getByText('导入预览失败，请检查后端服务。')).toHaveCount(0)
+})
+
 test('证券目录无匹配结果时显示明确空状态', async ({ page }) => {
   await page.route('**/api/**', async (route) => {
     const pathname = new URL(route.request().url()).pathname

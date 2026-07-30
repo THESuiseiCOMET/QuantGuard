@@ -4,7 +4,6 @@ import AccountsView from '@/views/accounts/AccountsView.vue'
 import OrdersView from '@/views/orders/OrdersView.vue'
 import MarketWorkspaceView from '@/views/market-data/MarketWorkspaceView.vue'
 import RecoveryCalculatorView from '@/views/calculator/RecoveryCalculatorView.vue'
-import SettingsView from '@/views/settings/SettingsView.vue'
 import NotFoundView from '@/views/placeholder/NotFoundView.vue'
 
 export const router = createRouter({
@@ -43,8 +42,8 @@ export const router = createRouter({
           component: RecoveryCalculatorView,
           meta: { title: '回本计算' },
         },
-        { path: 'settings', name: 'settings', component: SettingsView, meta: { title: '设置' } },
-        { path: 'system', name: 'system', redirect: '/settings' },
+        { path: 'settings', name: 'settings', redirect: '/market-data' },
+        { path: 'system', name: 'system', redirect: '/market-data' },
       ],
     },
     {

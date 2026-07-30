@@ -250,8 +250,46 @@ class MarketDataServiceImplTest {
 
         assertEquals("FAILED", result.status());
         assertEquals(0, result.recordsReceived());
-        assertTrue(result.message().contains("No daily price rows returned"));
+        assertTrue(result.message().contains("No daily price rows returned by the configured provider"));
         verify(dailyPriceMapper, never()).insert(any(InstrumentDailyPrice.class));
+    }
+
+    @Test
+    void incrementalSyncWithExistingPricesTreatsNoRowsAsUpToDate() {
+        InstrumentDailyPrice latest = new InstrumentDailyPrice();
+        latest.setTradeDate(LocalDate.of(2026, 1, 30));
+        when(securityInstrumentMapper.selectById(1L)).thenReturn(activeInstrument());
+        when(dailyPriceMapper.selectOne(any(Wrapper.class))).thenReturn(latest);
+        when(marketDataProvider.fetchDailyBars(any(), any(), any())).thenReturn(List.of());
+
+        DailyPriceSyncResult result = marketDataService.syncInstrumentDailyPrices(
+                1L, new DailyPriceSyncRequest(null, LocalDate.of(2026, 1, 31), false), "MANUAL");
+
+        assertEquals("SUCCESS", result.status());
+        assertEquals(0, result.recordsReceived());
+        assertEquals(LocalDate.of(2026, 1, 30), result.latestTradeDate());
+        assertEquals("Already up to date", result.message());
+        verify(dailyPriceMapper, never()).insert(any(InstrumentDailyPrice.class));
+    }
+
+    @Test
+    void incrementalSyncWithExistingPricesTreatsProviderNoDataAsUpToDate() {
+        InstrumentDailyPrice latest = new InstrumentDailyPrice();
+        latest.setTradeDate(LocalDate.of(2026, 1, 30));
+        when(securityInstrumentMapper.selectById(1L)).thenReturn(activeInstrument());
+        when(dailyPriceMapper.selectOne(any(Wrapper.class))).thenReturn(latest);
+        when(marketDataProvider.fetchDailyBars(any(), any(), any()))
+                .thenThrow(new MarketDataProviderException(
+                        MarketDataProviderErrorType.NO_DATA,
+                        "No daily bars returned"));
+
+        DailyPriceSyncResult result = marketDataService.syncInstrumentDailyPrices(
+                1L, new DailyPriceSyncRequest(null, LocalDate.of(2026, 1, 31), false), "MANUAL");
+
+        assertEquals("SUCCESS", result.status());
+        assertEquals(0, result.recordsReceived());
+        assertEquals(LocalDate.of(2026, 1, 30), result.latestTradeDate());
+        assertEquals("Already up to date", result.message());
     }
 
     @Test

@@ -27,6 +27,7 @@ import com.vanyiung.quantguard.mapper.MarketDataSyncLogMapper;
 import com.vanyiung.quantguard.mapper.SecurityInstrumentMapper;
 import com.vanyiung.quantguard.marketdata.config.MarketDataProperties;
 import com.vanyiung.quantguard.marketdata.provider.MarketDataProvider;
+import com.vanyiung.quantguard.marketdata.provider.MarketDataProviderErrorType;
 import com.vanyiung.quantguard.marketdata.provider.MarketDataProviderException;
 import com.vanyiung.quantguard.marketdata.provider.ProviderDailyBar;
 import com.vanyiung.quantguard.marketdata.provider.ProviderInstrumentMetadata;
@@ -255,7 +256,14 @@ public class MarketDataServiceImpl implements MarketDataService {
             List<ProviderDailyBar> bars = marketDataProvider.fetchDailyBars(
                     List.of(new MarketSymbol(instrument.getSymbol(), instrument.getExchange())), startDate, endDate);
             if (bars.isEmpty()) {
-                String message = "No daily price rows returned. ETF symbols such as 588000.SH require Tushare fund_daily permission.";
+                boolean incrementalSync = request == null
+                        || (request.startDate() == null && !request.fullRefresh());
+                if (incrementalSync && latestTradeDate(instrumentId) != null) {
+                    finishLog(log, MarketDataSyncStatus.SUCCESS, 0, 0, 0, null);
+                    return new DailyPriceSyncResult(instrumentId, canonicalCode(instrument), "SUCCESS",
+                            0, 0, 0, latestTradeDate(instrumentId), "Already up to date");
+                }
+                String message = "No daily price rows returned by the configured provider";
                 finishLog(log, MarketDataSyncStatus.FAILED, 0, 0, 0, message);
                 return new DailyPriceSyncResult(instrumentId, canonicalCode(instrument), "FAILED",
                         0, 0, 0, latestTradeDate(instrumentId), message);
@@ -272,6 +280,11 @@ public class MarketDataServiceImpl implements MarketDataService {
             return new DailyPriceSyncResult(instrumentId, canonicalCode(instrument), "SUCCESS",
                     bars.size(), inserted, updated, latestTradeDate(instrumentId), "OK");
         } catch (Exception ex) {
+            if (isIncrementalNoData(instrumentId, request, ex)) {
+                finishLog(log, MarketDataSyncStatus.SUCCESS, 0, 0, 0, null);
+                return new DailyPriceSyncResult(instrumentId, canonicalCode(instrument), "SUCCESS",
+                        0, 0, 0, latestTradeDate(instrumentId), "Already up to date");
+            }
             finishLog(log, MarketDataSyncStatus.FAILED, 0, 0, 0, safeMessage(ex));
             return new DailyPriceSyncResult(instrumentId, canonicalCode(instrument), "FAILED",
                     0, 0, 0, latestTradeDate(instrumentId), safeMessage(ex));
@@ -444,6 +457,15 @@ public class MarketDataServiceImpl implements MarketDataService {
             return latest.plusDays(1);
         }
         return properties.getDefaultStartDate();
+    }
+
+    private boolean isIncrementalNoData(Long instrumentId, DailyPriceSyncRequest request, Exception exception) {
+        boolean incrementalSync = request == null
+                || (request.startDate() == null && !request.fullRefresh());
+        return incrementalSync
+                && latestTradeDate(instrumentId) != null
+                && exception instanceof MarketDataProviderException providerException
+                && providerException.errorType() == MarketDataProviderErrorType.NO_DATA;
     }
 
     private UpsertCount upsertDailyBar(Long instrumentId, ProviderDailyBar bar) {

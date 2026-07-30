@@ -23,13 +23,16 @@ def main(arguments: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(arguments)
     try:
         log_config = build_logging_config(args.log_dir)
-        uvicorn.run(
-            app,
+        config = uvicorn.Config(
+            app=app,
             host=args.host,
             port=args.port,
             workers=1,
             log_config=log_config,
         )
+        server = uvicorn.Server(config)
+        app.state.request_desktop_shutdown = lambda: setattr(server, "should_exit", True)
+        server.run()
         return 0
     except KeyboardInterrupt:
         return 0

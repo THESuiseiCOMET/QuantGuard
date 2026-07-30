@@ -73,16 +73,7 @@
 /* global CustomEvent, Document, MouseEvent, document, localStorage, window */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import {
-  DataAnalysis,
-  Expand,
-  Fold,
-  Moon,
-  Setting,
-  Sunny,
-  Tickets,
-  User,
-} from '@element-plus/icons-vue'
+import { DataAnalysis, Expand, Fold, Moon, Sunny, Tickets, User } from '@element-plus/icons-vue'
 import { Calculator } from '@lucide/vue'
 
 const route = useRoute()
@@ -127,7 +118,6 @@ const navItems = [
   { path: '/market-data', label: '行情中心', icon: DataAnalysis },
   { path: '/orders', label: '模拟订单', icon: Tickets },
   { path: '/recovery-calculator', label: '回本计算', icon: Calculator },
-  { path: '/settings', label: '设置中心', icon: Setting },
 ]
 
 const activePath = computed(() => {

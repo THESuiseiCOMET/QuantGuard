@@ -22,6 +22,7 @@ $capturedLogs = Join-Path $temporaryRoot 'captured'
 $pythonProcess = $null
 $backendProcess = $null
 $smokeSucceeded = $false
+$shutdownToken = [guid]::NewGuid().ToString('N')
 
 function Quote-ProcessArgument {
     param([string]$Value)
@@ -32,7 +33,8 @@ function Start-IsolatedRuntime {
     param(
         [string]$Executable,
         [string[]]$Arguments,
-        [hashtable]$Environment
+        [hashtable]$Environment,
+        [string]$ShutdownUri
     )
 
     $startInfo = [Diagnostics.ProcessStartInfo]::new()
@@ -60,6 +62,7 @@ function Start-IsolatedRuntime {
         Process = $process
         StandardOutput = $process.StandardOutput.ReadToEndAsync()
         StandardError = $process.StandardError.ReadToEndAsync()
+        ShutdownUri = $ShutdownUri
     }
 }
 
@@ -94,6 +97,22 @@ function Stop-IsolatedRuntime {
         return
     }
     $process = $Runtime.Process
+    if (-not $process.HasExited -and -not [string]::IsNullOrWhiteSpace($Runtime.ShutdownUri)) {
+        try {
+            Invoke-WebRequest `
+                -Method Post `
+                -Uri $Runtime.ShutdownUri `
+                -Headers @{ 'X-QuantGuard-Shutdown-Token' = $shutdownToken } `
+                -UseBasicParsing `
+                -TimeoutSec 3 | Out-Null
+        } catch {
+            Write-Warning "$Name graceful shutdown request failed: $($_.Exception.Message)"
+        }
+        $deadline = (Get-Date).AddSeconds(8)
+        while (-not $process.HasExited -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 100
+        }
+    }
     if (-not $process.HasExited) {
         & taskkill.exe /PID $process.Id /T /F | Out-Null
         $process.WaitForExit(10000) | Out-Null
@@ -111,6 +130,11 @@ function Stop-IsolatedRuntime {
 
 if (-not (Test-Path -LiteralPath $pythonExe)) {
     throw "Packaged Python runtime is missing: $pythonExe"
+}
+$miniRacerDll = @(Get-ChildItem -LiteralPath (Split-Path -Parent $pythonExe) -Recurse -Filter 'mini_racer.dll' -File)
+$miniRacerData = @(Get-ChildItem -LiteralPath (Split-Path -Parent $pythonExe) -Recurse -Filter 'icudtl.dat' -File)
+if ($miniRacerDll.Count -ne 1 -or $miniRacerData.Count -ne 1) {
+    throw 'Packaged Python runtime is missing the MiniRacer files required by Sina index history.'
 }
 if (-not (Test-Path -LiteralPath $backendExe)) {
     throw "Packaged backend runtime is missing: $backendExe"
@@ -130,7 +154,10 @@ try {
             '--port', "$pythonPort",
             '--log-dir', $pythonLogs
         ) `
-        -Environment @{}
+        -Environment @{
+            QUANTGUARD_DESKTOP_SHUTDOWN_TOKEN = $shutdownToken
+        } `
+        -ShutdownUri "http://127.0.0.1:$pythonPort/internal/desktop/shutdown"
     Wait-HttpReady 'Packaged market-data service' "http://127.0.0.1:$pythonPort/health" 90
 
     $invalidLookup = @{
@@ -163,11 +190,13 @@ try {
         QUANTGUARD_DATA_DIR = $dataRoot
         MARKET_DATA_PROVIDER = 'python'
         PYTHON_MARKET_DATA_BASE_URL = "http://127.0.0.1:$pythonPort"
+        QUANTGUARD_DESKTOP_SHUTDOWN_TOKEN = $shutdownToken
     }
     $backendProcess = Start-IsolatedRuntime `
         -Executable $backendExe `
         -Arguments @("--server.port=$backendPort") `
-        -Environment $backendEnvironment
+        -Environment $backendEnvironment `
+        -ShutdownUri "http://127.0.0.1:$backendPort/api/desktop/shutdown"
     Wait-HttpReady 'Packaged backend' "http://127.0.0.1:$backendPort/api/health" 120
 
     $accountBody = @{
@@ -217,14 +246,13 @@ try {
         throw "Packaged backend did not create its H2 database: $databasePath"
     }
 
-    # The smoke harness force-stops the child process, so allow H2's write delay to flush first.
-    Start-Sleep -Seconds 2
     Stop-IsolatedRuntime -Runtime $backendProcess -Name 'backend-first-run'
     $backendProcess = $null
     $backendProcess = Start-IsolatedRuntime `
         -Executable $backendExe `
         -Arguments @("--server.port=$backendPort") `
-        -Environment $backendEnvironment
+        -Environment $backendEnvironment `
+        -ShutdownUri "http://127.0.0.1:$backendPort/api/desktop/shutdown"
     Wait-HttpReady 'Restarted packaged backend' "http://127.0.0.1:$backendPort/api/health" 120
 
     $accounts = (Invoke-RestMethod -Uri "http://127.0.0.1:$backendPort/api/accounts").data
@@ -244,6 +272,7 @@ try {
     Write-Host "  Backend executable: $backendExe"
     Write-Host '  PATH isolation: system directory only; JAVA_HOME/PYTHONHOME/PYTHONPATH removed'
     Write-Host '  Packaged APIs: health, instrument lookup, and daily bars verified'
+    Write-Host '  Graceful shutdown: authenticated loopback endpoints verified'
     Write-Host '  H2 restart persistence: account and portfolio preserved'
     Write-Host "  Live Java-to-Python market data: $($RunLiveMarketData.IsPresent)"
     $smokeSucceeded = $true

@@ -7,16 +7,38 @@
     <div class="market-layout">
       <aside class="surface instrument-panel">
         <div class="panel-title">
-          <div>
+          <div class="panel-title-copy">
             <span>证券列表</span>
             <small>{{ filteredInstruments.length }} 只</small>
           </div>
-          <el-button size="small" type="primary" :icon="Plus" @click="openImportDialog">
-            添加证券
-          </el-button>
+          <el-tooltip content="添加证券" placement="top">
+            <el-button
+              class="panel-icon-button"
+              :icon="Plus"
+              circle
+              aria-label="添加证券"
+              @click="openImportDialog"
+            />
+          </el-tooltip>
         </div>
-        <el-input v-model="filters.keyword" placeholder="搜索代码或名称" clearable />
-        <el-space class="filter-row" fill>
+        <div class="instrument-search-row">
+          <el-input
+            v-model="filters.keyword"
+            :prefix-icon="Search"
+            placeholder="搜索代码或名称"
+            clearable
+          />
+          <el-tooltip content="筛选证券" placement="top">
+            <el-button
+              class="filter-button"
+              :class="{ active: filters.exchange || filters.status }"
+              :icon="Filter"
+              aria-label="筛选证券"
+              @click="filtersOpen = !filtersOpen"
+            />
+          </el-tooltip>
+        </div>
+        <div v-if="filtersOpen" class="filter-row">
           <el-select v-model="filters.exchange" placeholder="交易所" clearable>
             <el-option label="上交所 SSE" value="SSE" />
             <el-option label="深交所 SZSE" value="SZSE" />
@@ -25,15 +47,12 @@
             <el-option label="启用" value="ACTIVE" />
             <el-option label="停用" value="DISABLED" />
           </el-select>
-        </el-space>
+        </div>
 
-        <el-alert
-          v-if="filteredInstruments.length === 0"
-          title="暂无证券"
-          description="请先搜索并添加证券。"
-          type="info"
-          :closable="false"
-        />
+        <div v-if="filteredInstruments.length === 0" class="instrument-empty">
+          <strong>暂无证券</strong>
+          <span>请搜索并添加证券</span>
+        </div>
 
         <el-scrollbar class="instrument-scroll">
           <div
@@ -47,34 +66,41 @@
               type="button"
               @click="selectInstrument(instrument.id)"
             >
-              <span>
+              <span class="instrument-identity">
                 <strong>{{ instrumentDisplayName(instrument) }}</strong>
                 <small>{{ instrumentSecondaryText(instrument) }}</small>
               </span>
-              <span class="instrument-tags">
-                <el-tag
-                  size="small"
-                  :type="instrument.status === 'ACTIVE' ? 'success' : 'info'"
-                  effect="plain"
-                >
-                  {{ statusLabel(instrument.status) }}
-                </el-tag>
+              <span class="instrument-status" :class="instrument.status.toLowerCase()">
+                <i aria-hidden="true"></i>
+                {{ statusLabel(instrument.status) }}
               </span>
             </button>
             <div class="instrument-actions">
-              <el-button
-                size="small"
-                link
-                type="primary"
-                :disabled="instrument.status !== 'ACTIVE'"
-                :loading="syncingInstrumentId === instrument.id"
-                title="停用证券需先恢复后才能同步行情"
-                @click="syncInstrument(instrument)"
+              <el-tooltip
+                :content="
+                  instrument.status === 'ACTIVE' ? '同步行情' : '停用证券需先恢复后才能同步行情'
+                "
+                placement="top"
               >
-                同步
-              </el-button>
+                <el-button
+                  class="instrument-action-button"
+                  text
+                  circle
+                  :icon="Refresh"
+                  :disabled="instrument.status !== 'ACTIVE'"
+                  :loading="syncingInstrumentId === instrument.id"
+                  aria-label="同步行情"
+                  @click="syncInstrument(instrument)"
+                />
+              </el-tooltip>
               <el-dropdown trigger="click" @command="handleInstrumentCommand(instrument, $event)">
-                <el-button size="small" link>更多</el-button>
+                <el-button
+                  class="instrument-action-button"
+                  text
+                  circle
+                  :icon="MoreFilled"
+                  aria-label="更多操作"
+                />
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item command="toggle-status">
@@ -96,40 +122,77 @@
       </aside>
 
       <main class="surface market-main">
-        <div class="summary-grid">
-          <div>
-            <span>当前证券</span>
-            <strong>{{ selectedInstrumentLabel }}</strong>
+        <header class="quote-header">
+          <div class="quote-primary">
+            <div class="quote-identity">
+              <span>当前证券</span>
+              <strong>{{ selectedInstrumentLabel }}</strong>
+              <small>
+                {{
+                  selectedInstrument
+                    ? instrumentSecondaryText(selectedInstrument)
+                    : '从左侧列表选择证券'
+                }}
+              </small>
+            </div>
+            <div class="quote-price">
+              <span>最新收盘价</span>
+              <strong>{{ formatDecimal(summary?.latestClose) }}</strong>
+            </div>
+            <div class="quote-change">
+              <span>最新涨跌幅</span>
+              <strong :class="changeClass(summary?.latestPercentageChange)">
+                {{ signed(summary?.latestPercentageChange, '%') }}
+              </strong>
+            </div>
+            <div class="quote-actions">
+              <el-button
+                :icon="Refresh"
+                :disabled="!selectedInstrumentId || selectedInstrument?.status !== 'ACTIVE'"
+                :loading="syncing"
+                title="停用证券需先恢复后才能同步行情"
+                @click="syncCurrent"
+              >
+                同步
+              </el-button>
+              <el-button
+                :icon="ShoppingCart"
+                :disabled="
+                  !selectedInstrumentId ||
+                  selectedInstrument?.status !== 'ACTIVE' ||
+                  selectedInstrument?.assetType === 'INDEX'
+                "
+                :title="
+                  selectedInstrument?.assetType === 'INDEX' ? '指数仅用于查看行情，不能下单' : ''
+                "
+                @click="goToOrder"
+              >
+                下单
+              </el-button>
+            </div>
           </div>
-          <div>
-            <span>最新日线日期</span>
-            <strong>{{ summary?.latestTradeDate ?? '暂无数据' }}</strong>
-            <small>
-              {{ prices.length }} 条日线 · 最后同步
-              {{ formatDateTime(summary?.lastSyncAt) }}
-            </small>
+          <div class="quote-meta">
+            <div>
+              <span>最新日期</span>
+              <strong>{{ summary?.latestTradeDate ?? '暂无数据' }}</strong>
+            </div>
+            <div data-testid="range-high">
+              <span>区间最高</span>
+              <strong>{{ formatDecimal(rangeHigh) }}</strong>
+            </div>
+            <div data-testid="range-low">
+              <span>区间最低</span>
+              <strong>{{ formatDecimal(rangeLow) }}</strong>
+            </div>
+            <div class="quote-sync-meta">
+              <span>行情数据</span>
+              <strong>{{ prices.length }} 条日线</strong>
+              <small>同步于 {{ formatDateTime(summary?.lastSyncAt) }}</small>
+            </div>
           </div>
-          <div data-testid="range-high">
-            <span>当前范围最高价</span>
-            <strong>{{ formatDecimal(rangeHigh) }}</strong>
-          </div>
-          <div>
-            <span>最新涨跌幅</span>
-            <strong :class="changeClass(summary?.latestPercentageChange)">
-              {{ signed(summary?.latestPercentageChange, '%') }}
-            </strong>
-          </div>
-          <div>
-            <span>最新收盘价</span>
-            <strong>{{ formatDecimal(summary?.latestClose) }}</strong>
-          </div>
-          <div data-testid="range-low">
-            <span>当前范围最低价</span>
-            <strong>{{ formatDecimal(rangeLow) }}</strong>
-          </div>
-        </div>
+        </header>
 
-        <div class="toolbar">
+        <div class="chart-toolbar">
           <div class="range-tools">
             <el-radio-group
               :model-value="displayRangeKey"
@@ -145,41 +208,28 @@
               <el-radio-button v-if="customRangeActive" value="CUSTOM">自定义</el-radio-button>
             </el-radio-group>
           </div>
+        </div>
 
-          <el-space class="market-actions">
+        <div class="chart-panel">
+          <el-empty
+            v-if="!selectedInstrumentId"
+            :image-size="72"
+            description="请选择一只证券查看 K 线"
+          />
+          <el-empty
+            v-else-if="!priceLoading && prices.length === 0"
+            :image-size="72"
+            description="当前证券暂无历史日线，请重新同步行情。"
+          >
             <el-button
-              type="primary"
+              v-if="selectedInstrument?.status === 'ACTIVE'"
               :icon="Refresh"
-              :disabled="!selectedInstrumentId || selectedInstrument?.status !== 'ACTIVE'"
               :loading="syncing"
-              title="停用证券需先恢复后才能同步行情"
               @click="syncCurrent"
             >
               同步行情
             </el-button>
-            <el-button
-              :icon="ShoppingCart"
-              :disabled="
-                !selectedInstrumentId ||
-                selectedInstrument?.status !== 'ACTIVE' ||
-                selectedInstrument?.assetType === 'INDEX'
-              "
-              :title="
-                selectedInstrument?.assetType === 'INDEX' ? '指数仅用于查看行情，不能下单' : ''
-              "
-              @click="goToOrder"
-            >
-              去下单
-            </el-button>
-          </el-space>
-        </div>
-
-        <div class="chart-panel">
-          <el-empty v-if="!selectedInstrumentId" description="请选择一只证券查看 K 线" />
-          <el-empty
-            v-else-if="!priceLoading && prices.length === 0"
-            description="当前证券暂无历史日线，请重新同步行情。"
-          />
+          </el-empty>
           <CandlestickChart
             v-else
             v-loading="priceLoading"
@@ -324,7 +374,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, ShoppingCart } from '@element-plus/icons-vue'
+import { Filter, MoreFilled, Plus, Refresh, Search, ShoppingCart } from '@element-plus/icons-vue'
 import { AxiosError } from 'axios'
 import PageHeader from '@/components/common/PageHeader.vue'
 import {
@@ -385,6 +435,7 @@ const catalogSearchAttempted = ref(false)
 const catalogSearchError = ref('')
 const errorMessage = ref('')
 const dialogVisible = ref(false)
+const filtersOpen = ref(false)
 const catalogResults = ref<InstrumentCatalogItem[]>([])
 const selectedCatalogCodes = ref<string[]>([])
 const importStartDate = ref<string | null>(null)
@@ -928,8 +979,8 @@ function formatDateTime(value: string | null | undefined) {
 <style scoped>
 .market-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: minmax(220px, 248px) minmax(0, 1fr);
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -942,24 +993,24 @@ function formatDateTime(value: string | null | undefined) {
 .instrument-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 9px;
   min-height: 0;
-  padding: 14px;
+  padding: 12px;
 }
 
 .panel-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   font-size: 15px;
   font-weight: 700;
 }
 
-.panel-title > div {
+.panel-title-copy {
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -969,70 +1020,172 @@ function formatDateTime(value: string | null | undefined) {
   font-weight: 400;
 }
 
+.panel-icon-button,
+.filter-button {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+}
+
+.panel-icon-button {
+  color: var(--qg-text);
+  background: var(--qg-subtle);
+  border-color: var(--qg-border);
+}
+
+.instrument-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+}
+
+.filter-button.active {
+  color: var(--qg-text);
+  background: var(--qg-nav-active);
+  border-color: var(--qg-text-muted);
+}
+
 .filter-row {
-  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.filter-row :deep(.el-select) {
+  min-width: 0;
+}
+
+.instrument-empty {
+  display: grid;
+  gap: 4px;
+  padding: 24px 12px;
+  color: var(--qg-text-muted);
+  text-align: center;
+}
+
+.instrument-empty strong {
+  color: var(--qg-text);
+  font-size: 14px;
+}
+
+.instrument-empty span {
+  font-size: 12px;
 }
 
 .instrument-scroll {
   flex: 1;
-  min-height: 420px;
+  min-height: 480px;
 }
 
 .instrument-item {
   display: grid;
   width: 100%;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+  align-items: center;
   border: 0;
   border-bottom: 1px solid var(--qg-border);
   background: transparent;
-  padding: 10px 4px;
+  padding: 4px;
   color: var(--qg-text);
   text-align: left;
+  transition: background-color 0.16s ease;
 }
 
 .instrument-item.active {
-  color: var(--qg-sidebar-active);
-  font-weight: 700;
+  background: var(--qg-nav-active);
+}
+
+.instrument-item:hover {
+  background: var(--qg-nav-hover);
 }
 
 .instrument-select {
   display: flex;
   min-width: 0;
   flex: 1;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   border: 0;
   background: transparent;
   color: inherit;
   cursor: pointer;
+  padding: 8px 6px;
   text-align: left;
 }
 
-.instrument-select span {
+.instrument-identity {
+  display: grid;
+  gap: 2px;
   min-width: 0;
 }
 
-.instrument-select small {
+.instrument-identity strong,
+.instrument-identity small {
   display: block;
   overflow: hidden;
-  color: var(--qg-text-muted);
-  font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.instrument-tags,
-.instrument-actions {
+.instrument-identity strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.instrument-identity small {
+  color: var(--qg-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.instrument-status {
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  padding-top: 1px;
+  color: var(--qg-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.instrument-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--qg-text-muted);
+}
+
+.instrument-status.active i {
+  background: #188038;
+}
+
+.instrument-status.disabled i {
+  background: #8b8b8b;
 }
 
 .instrument-actions {
-  min-height: 24px;
+  display: flex;
+  min-height: 32px;
+  align-items: center;
   justify-content: flex-end;
+  opacity: 0;
+  transition: opacity 0.16s ease;
+}
+
+.instrument-item:hover .instrument-actions,
+.instrument-item.active .instrument-actions,
+.instrument-actions:focus-within {
+  opacity: 1;
+}
+
+.instrument-action-button {
+  width: 28px;
+  height: 28px;
+  color: var(--qg-text-muted);
 }
 
 .danger-menu-item {
@@ -1046,55 +1199,68 @@ function formatDateTime(value: string | null | undefined) {
   padding: 0;
 }
 
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  overflow: hidden;
-}
-
-.summary-grid div {
-  min-width: 0;
-  border-right: 1px solid var(--qg-border);
+.quote-header {
   border-bottom: 1px solid var(--qg-border);
-  padding: 13px 16px;
 }
 
-.summary-grid div:nth-child(3n) {
-  border-right: 0;
+.quote-primary {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.5fr) minmax(120px, 0.7fr) minmax(120px, 0.7fr) auto;
+  gap: 20px;
+  align-items: center;
+  padding: 16px 18px 12px;
 }
 
-.summary-grid div:first-child {
-  background: var(--qg-subtle);
+.quote-primary > div,
+.quote-meta > div {
+  min-width: 0;
 }
 
-.summary-grid span {
+.quote-primary span,
+.quote-meta span {
   display: block;
   color: var(--qg-text-muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
-.summary-grid strong {
-  display: block;
-  overflow: hidden;
-  margin-top: 6px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 15px;
-}
-
-.summary-grid small {
+.quote-primary strong,
+.quote-meta strong {
   display: block;
   overflow: hidden;
   margin-top: 4px;
-  color: var(--qg-text-muted);
-  font-size: 11px;
-  line-height: 1.4;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.summary-grid div:first-child strong {
-  font-size: 17px;
+.quote-identity strong {
+  font-size: 20px;
+}
+
+.quote-identity small,
+.quote-sync-meta small {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--qg-text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quote-price strong {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.quote-change strong {
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.quote-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .change-positive {
@@ -1105,15 +1271,24 @@ function formatDateTime(value: string | null | undefined) {
   color: #188038;
 }
 
-.toolbar {
-  display: flex;
+.quote-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(96px, 0.7fr)) minmax(180px, 1.3fr);
+  gap: 18px;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  padding: 10px 18px 12px;
+  background: var(--qg-subtle);
+}
+
+.quote-meta strong {
+  font-size: 14px;
+}
+
+.chart-toolbar {
+  display: flex;
   min-width: 0;
-  flex-wrap: wrap;
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--qg-border);
+  align-items: center;
+  padding: 10px 14px 4px;
   background: var(--qg-panel);
 }
 
@@ -1123,20 +1298,20 @@ function formatDateTime(value: string | null | undefined) {
   min-width: 0;
 }
 
-.market-actions :deep(.el-button) {
-  min-width: 102px;
+.range-tools :deep(.el-radio-button__inner) {
+  min-width: 46px;
 }
 
 .chart-panel {
   display: grid;
   min-height: 0;
-  padding: 8px 10px 10px;
+  padding: 4px 10px 10px;
   background: var(--qg-panel);
 }
 
 .chart-panel :deep(.chart) {
-  height: 460px;
-  min-height: 340px;
+  height: min(560px, calc(100vh - 285px));
+  min-height: 420px;
 }
 
 .catalog-select {
@@ -1173,32 +1348,47 @@ function formatDateTime(value: string | null | undefined) {
   margin-top: 12px;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .market-layout {
     grid-template-columns: 1fr;
   }
 
   .instrument-scroll {
     flex: none;
-    height: 360px;
+    height: 260px;
     min-height: 0;
   }
 
-  .summary-grid {
+  .instrument-item {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .quote-primary {
+    grid-template-columns: minmax(180px, 1.4fr) repeat(2, minmax(110px, 0.7fr)) auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .quote-primary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .quote-actions {
+    justify-content: flex-start;
+  }
+
+  .quote-meta {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .summary-grid div:nth-child(3n) {
-    border-right: 1px solid var(--qg-border);
+  .chart-toolbar {
+    overflow-x: auto;
   }
 
-  .summary-grid div:nth-child(2n) {
-    border-right: 0;
-  }
-
-  .toolbar {
-    align-items: flex-start;
-    flex-direction: column;
+  .chart-panel :deep(.chart) {
+    height: 460px;
+    min-height: 360px;
   }
 }
 </style>

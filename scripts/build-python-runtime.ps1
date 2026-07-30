@@ -26,7 +26,7 @@ if (-not (Test-Path -LiteralPath $specPath)) {
     throw "PyInstaller spec is missing: $specPath"
 }
 
-& $pythonExe -c 'import PyInstaller, akshare, baostock, fastapi, pandas, uvicorn'
+& $pythonExe -c 'import PyInstaller, akshare, baostock, fastapi, pandas, py_mini_racer, uvicorn'
 Assert-LastExitCode 'Python packaging dependency check'
 
 New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
@@ -50,6 +50,11 @@ try {
 $executable = Join-Path $targetPath 'quantguard-market-data.exe'
 if (-not (Test-Path -LiteralPath $executable)) {
     throw "Python runtime executable was not created: $executable"
+}
+$miniRacerDll = @(Get-ChildItem -LiteralPath $targetPath -Recurse -Filter 'mini_racer.dll' -File)
+$miniRacerData = @(Get-ChildItem -LiteralPath $targetPath -Recurse -Filter 'icudtl.dat' -File)
+if ($miniRacerDll.Count -ne 1 -or $miniRacerData.Count -ne 1) {
+    throw 'Packaged Python runtime is missing the MiniRacer files required by Sina index history.'
 }
 
 $version = (& $executable --version | Select-Object -Last 1).Trim()

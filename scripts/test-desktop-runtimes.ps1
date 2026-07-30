@@ -131,6 +131,11 @@ function Stop-IsolatedRuntime {
 if (-not (Test-Path -LiteralPath $pythonExe)) {
     throw "Packaged Python runtime is missing: $pythonExe"
 }
+$miniRacerDll = @(Get-ChildItem -LiteralPath (Split-Path -Parent $pythonExe) -Recurse -Filter 'mini_racer.dll' -File)
+$miniRacerData = @(Get-ChildItem -LiteralPath (Split-Path -Parent $pythonExe) -Recurse -Filter 'icudtl.dat' -File)
+if ($miniRacerDll.Count -ne 1 -or $miniRacerData.Count -ne 1) {
+    throw 'Packaged Python runtime is missing the MiniRacer files required by Sina index history.'
+}
 if (-not (Test-Path -LiteralPath $backendExe)) {
     throw "Packaged backend runtime is missing: $backendExe"
 }

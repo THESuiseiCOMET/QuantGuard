@@ -8,13 +8,13 @@ datas = []
 binaries = []
 hiddenimports = collect_submodules("uvicorn")
 
-for package in ("akshare", "baostock"):
+for package in ("akshare", "baostock", "py_mini_racer"):
     package_datas, package_binaries, package_hiddenimports = collect_all(package)
     datas += package_datas
     binaries += package_binaries
     hiddenimports += package_hiddenimports
 
-for package in ("akshare", "baostock", "fastapi", "pydantic", "uvicorn"):
+for package in ("akshare", "baostock", "fastapi", "mini-racer", "pydantic", "uvicorn"):
     datas += copy_metadata(package)
 
 analysis = Analysis(

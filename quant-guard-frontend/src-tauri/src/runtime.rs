@@ -390,6 +390,7 @@ impl DesktopServiceManager {
             .ok_or_else(|| RuntimeError::Configuration("Python port is unavailable".to_string()))?;
         let mut command = Command::new(&self.config.backend_executable);
         command.arg(format!("--server.port={port}"));
+        command.arg("--server.address=127.0.0.1");
         command.env("SPRING_PROFILES_ACTIVE", "desktop");
         command.env("QUANTGUARD_DATA_DIR", &self.config.data_root);
         command.env("MARKET_DATA_PROVIDER", "python");

@@ -15,29 +15,38 @@ import type {
   UpdateMarketDataProviderConfigRequest,
 } from '@/types/marketData'
 
+const CATALOG_REQUEST_TIMEOUT_MS = 30_000
+const MARKET_DATA_OPERATION_TIMEOUT_MS = 120_000
+
 export function searchInstrumentCatalog(query: string, limit = 20) {
   return http.get('/instruments/catalog/search', {
     params: { query, limit },
+    timeout: CATALOG_REQUEST_TIMEOUT_MS,
   }) as Promise<InstrumentCatalogItem[]>
 }
 
 export function previewInstrumentImport(request: InstrumentImportPreviewRequest) {
-  return http.post('/instruments/import/preview', request) as Promise<ImportPreviewItem[]>
+  return http.post('/instruments/import/preview', request, {
+    timeout: CATALOG_REQUEST_TIMEOUT_MS,
+  }) as Promise<ImportPreviewItem[]>
 }
 
 export function importInstruments(request: ImportInstrumentsRequest) {
-  return http.post('/instruments/import', request) as Promise<InstrumentImportResult[]>
+  return http.post('/instruments/import', request, {
+    timeout: MARKET_DATA_OPERATION_TIMEOUT_MS,
+  }) as Promise<InstrumentImportResult[]>
 }
 
 export function syncInstrumentDailyPrices(instrumentId: number, request: DailyPriceSyncRequest) {
-  return http.post(
-    `/instruments/${instrumentId}/daily-prices/sync`,
-    request,
-  ) as Promise<DailyPriceSyncResult>
+  return http.post(`/instruments/${instrumentId}/daily-prices/sync`, request, {
+    timeout: MARKET_DATA_OPERATION_TIMEOUT_MS,
+  }) as Promise<DailyPriceSyncResult>
 }
 
 export function syncMultipleInstrumentDailyPrices(request: BatchDailyPriceSyncRequest) {
-  return http.post('/market-data/daily-prices/sync', request) as Promise<BatchDailyPriceSyncResult>
+  return http.post('/market-data/daily-prices/sync', request, {
+    timeout: MARKET_DATA_OPERATION_TIMEOUT_MS,
+  }) as Promise<BatchDailyPriceSyncResult>
 }
 
 export function getMarketDataProviderConfig() {

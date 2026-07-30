@@ -14,12 +14,16 @@ class FakeBaoStock:
         metadata: dict[str, RawInstrumentMetadata],
         frames: dict[str, pd.DataFrame] | None = None,
         failures: dict[str, MarketDataError] | None = None,
+        daily_failures: dict[str, MarketDataError] | None = None,
     ) -> None:
         self.metadata = metadata
         self.frames = frames or {}
         self.failures = failures or {}
+        self.daily_failures = daily_failures or {}
+        self.lookup_calls = 0
 
     def lookup_instrument(self, symbol):
+        self.lookup_calls += 1
         if symbol.canonical in self.failures:
             raise self.failures[symbol.canonical]
         if symbol.canonical not in self.metadata:
@@ -36,8 +40,8 @@ class FakeBaoStock:
         ]
 
     def daily_bars(self, symbol, _start_date, _end_date):
-        if symbol.canonical in self.failures:
-            raise self.failures[symbol.canonical]
+        if symbol.canonical in self.daily_failures:
+            raise self.daily_failures[symbol.canonical]
         return self.frames.get(symbol.canonical, pd.DataFrame())
 
 
@@ -45,10 +49,18 @@ class FakeAkShare:
     def __init__(
         self,
         frames: dict[str, pd.DataFrame] | None = None,
+        stocks: list[CatalogInstrument] | None = None,
         indices: list[CatalogInstrument] | None = None,
     ) -> None:
         self.frames = frames or {}
+        self.stocks = stocks or []
         self.indices = indices or []
+
+    def stock_catalog(self):
+        return self.stocks
+
+    def stock_daily_bars(self, symbol):
+        return self.frames.get(symbol.canonical, pd.DataFrame())
 
     def etf_daily_bars(self, symbol):
         return self.frames.get(symbol.canonical, pd.DataFrame())
@@ -111,6 +123,18 @@ def test_catalog_search_matches_code_and_name_with_exchange_disambiguation() -> 
     assert [item.symbol for item in by_code.results] == ["000688.SH", "000688.SZ"]
     assert [item.instrument_type for item in by_code.results] == ["INDEX", "STOCK"]
     assert [item.symbol for item in by_name.results] == ["000688.SH"]
+
+
+def test_lookup_reuses_warm_catalog_without_repeating_provider_lookup() -> None:
+    baostock = FakeBaoStock({"600089.SH": metadata("1", "TBEA")})
+    service = MarketDataService(baostock, FakeAkShare())
+
+    search = service.search_instruments("TBEA", 20)
+    lookup = service.lookup_instruments(["600089.SH"])
+
+    assert [item.symbol for item in search.results] == ["600089.SH"]
+    assert lookup.results[0].instrument.name == "TBEA"
+    assert baostock.lookup_calls == 0
 
 
 def test_stock_volume_is_divided_by_100_and_amount_stays_in_yuan() -> None:
@@ -267,7 +291,7 @@ def test_index_uses_sina_history_and_zero_when_amount_is_unavailable() -> None:
     )
     service = MarketDataService(
         FakeBaoStock({}),
-        FakeAkShare({"000688.SH": frame}, [index]),
+        FakeAkShare({"000688.SH": frame}, indices=[index]),
     )
 
     response = service.daily_bars(
@@ -280,6 +304,82 @@ def test_index_uses_sina_history_and_zero_when_amount_is_unavailable() -> None:
     assert bar.previous_close == "1019.723"
     assert bar.volume_lots == "2000000"
     assert bar.amount_cny == "0"
+
+
+def test_stock_falls_back_to_sina_and_computes_previous_close_before_filtering() -> None:
+    frame = pd.DataFrame(
+        [
+            {
+                "date": "2026-07-01",
+                "open": "9.8",
+                "high": "10.2",
+                "low": "9.7",
+                "close": "10",
+                "volume": "10000",
+                "amount": "100000",
+            },
+            {
+                "date": "2026-07-02",
+                "open": "10",
+                "high": "11",
+                "low": "9.9",
+                "close": "10.5",
+                "volume": "123450",
+                "amount": "987654.32",
+            },
+        ]
+    )
+    service = MarketDataService(
+        FakeBaoStock(
+            {"002714.SZ": metadata("1", "Muyuan Foods")},
+            daily_failures={
+                "002714.SZ": MarketDataError(
+                    ErrorCode.UPSTREAM_UNAVAILABLE,
+                    "BaoStock unavailable",
+                )
+            },
+        ),
+        FakeAkShare({"002714.SZ": frame}),
+    )
+
+    response = service.daily_bars(
+        ["002714.SZ"],
+        date(2026, 7, 2),
+        date(2026, 7, 2),
+    )
+    bar = response.results[0].bars[0]
+
+    assert response.status == "SUCCESS"
+    assert bar.previous_close == "10"
+    assert bar.change == "0.5"
+    assert bar.percentage_change == "5"
+    assert bar.volume_lots == "1234.5"
+    assert bar.amount_cny == "987654.32"
+
+
+def test_stock_metadata_falls_back_to_akshare_catalog() -> None:
+    stock = CatalogInstrument(
+        CanonicalSymbol.parse("002714.SZ"),
+        metadata("1", "Muyuan Foods"),
+    )
+    service = MarketDataService(
+        FakeBaoStock(
+            {},
+            failures={
+                "002714.SZ": MarketDataError(
+                    ErrorCode.UPSTREAM_UNAVAILABLE,
+                    "BaoStock unavailable",
+                )
+            },
+        ),
+        FakeAkShare(stocks=[stock]),
+    )
+
+    result = service.lookup_instruments(["002714.SZ"]).results[0]
+
+    assert result.error is None
+    assert result.instrument.name == "Muyuan Foods"
+    assert result.instrument.instrument_type == "STOCK"
 
 
 def test_one_symbol_failure_does_not_block_other_symbols() -> None:

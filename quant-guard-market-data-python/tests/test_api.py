@@ -25,6 +25,12 @@ class MetadataOnlyBaoStock:
 
 
 class NoAkShare:
+    def stock_catalog(self):
+        return []
+
+    def stock_daily_bars(self, _symbol):
+        raise AssertionError("Network client must not be called by this test")
+
     def etf_daily_bars(self, _symbol):
         raise AssertionError("Network client must not be called by this test")
 

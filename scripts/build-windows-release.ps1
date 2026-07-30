@@ -64,8 +64,15 @@ try {
     Assert-LastExitCode 'Git commit lookup'
     $shortCommit = (& git rev-parse --short=7 HEAD).Trim()
     Assert-LastExitCode 'Git short commit lookup'
-    $branch = (& git branch --show-current).Trim()
+    $branchOutput = & git branch --show-current
     Assert-LastExitCode 'Git branch lookup'
+    $branch = if ($branchOutput) {
+        ($branchOutput | Select-Object -First 1).ToString().Trim()
+    } elseif (-not [string]::IsNullOrWhiteSpace($env:GITHUB_HEAD_REF)) {
+        $env:GITHUB_HEAD_REF.Trim()
+    } else {
+        'detached'
+    }
 } finally {
     Pop-Location
 }

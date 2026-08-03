@@ -101,7 +101,7 @@ async function exitApp() {
 <style scoped>
 .desktop-startup {
   display: grid;
-  min-height: 100vh;
+  min-height: 100%;
   place-items: center;
   padding: 32px;
   background: var(--qg-bg);

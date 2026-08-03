@@ -2,7 +2,6 @@
   <el-container class="main-layout" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
     <el-aside class="sidebar" width="var(--qg-sidebar-width)">
       <div class="brand">
-        <div class="brand-name">QuantGuard</div>
         <el-tooltip :content="sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'" placement="right">
           <el-button
             class="sidebar-action"
@@ -202,7 +201,7 @@ async function toggleTheme(event: MouseEvent) {
 .main-layout {
   width: 100%;
   min-width: 0;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
   --qg-sidebar-width: 218px;
 }
@@ -228,24 +227,9 @@ async function toggleTheme(event: MouseEvent) {
 .brand {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   height: 64px;
   padding: 0 18px;
-}
-
-.brand-name {
-  max-width: 140px;
-  overflow: hidden;
-  color: var(--qg-text);
-  font-size: 18px;
-  font-weight: 700;
-  opacity: 1;
-  white-space: nowrap;
-  transform: translateX(0);
-  transition:
-    max-width 0.22s cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 0.16s ease,
-    transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-action {
@@ -363,12 +347,6 @@ async function toggleTheme(event: MouseEvent) {
 .is-sidebar-collapsed .brand {
   justify-content: center;
   padding: 0;
-}
-
-.is-sidebar-collapsed .brand-name {
-  max-width: 0;
-  opacity: 0;
-  transform: translateX(-8px);
 }
 
 .is-sidebar-collapsed .sidebar-action {

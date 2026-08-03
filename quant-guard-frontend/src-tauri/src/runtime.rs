@@ -15,6 +15,8 @@ use uuid::Uuid;
 #[cfg(windows)]
 use std::os::windows::io::AsRawHandle;
 #[cfg(windows)]
+use std::os::windows::process::CommandExt;
+#[cfg(windows)]
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
 #[cfg(windows)]
 use windows_sys::Win32::System::JobObjects::{
@@ -22,6 +24,8 @@ use windows_sys::Win32::System::JobObjects::{
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
     SetInformationJobObject, TerminateJobObject,
 };
+#[cfg(windows)]
+use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
 const PYTHON_TIMEOUT: Duration = Duration::from_secs(30);
 const BACKEND_TIMEOUT: Duration = Duration::from_secs(60);
@@ -608,6 +612,8 @@ fn spawn_managed(
     command.stdout(Stdio::from(stdout));
     command.stderr(Stdio::from(stderr));
     command.stdin(Stdio::null());
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
     let child = command.spawn().map_err(|source| RuntimeError::Spawn {
         service: name.to_string(),
         source,

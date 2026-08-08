@@ -68,13 +68,13 @@ http://localhost:5173
 npm run tauri:dev
 ```
 
-从仓库根目录构建完整的 Windows 内部测试安装包：
+从仓库根目录构建完整的 Windows 发布候选安装包：
 
 ```powershell
-.\scripts\build-tauri-desktop.ps1
+.\scripts\build-windows-release.ps1
 ```
 
-生产桌面客户端从安装资源目录启动自包含的 Python 行情服务和 Java 后端，不依赖系统 Python、JDK、MySQL 或源码目录。用户数据和日志保存在 `%APPDATA%\QuantGuard\`；运行时 staging、Rust target 和安装包均被 Git 忽略。当前安装包未签名，仅供内部测试。
+生产桌面客户端从安装资源目录启动自包含的 Python 行情服务和 Java 后端，不依赖系统 Python、JDK、MySQL 或源码目录。用户数据和日志保存在 `%APPDATA%\QuantGuard\`；运行时 staging、Rust target 和安装包均被 Git 忽略。当前候选安装包未签名，Windows 可能显示 SmartScreen 提示。
 
 ### API 配置
 
@@ -228,13 +228,13 @@ Browser development continues to use `npm run dev` and the Vite proxy. Tauri dev
 npm run tauri:dev
 ```
 
-Build the complete internal Windows installer from the repository root:
+Build the Windows release-candidate installer from the repository root:
 
 ```powershell
-.\scripts\build-tauri-desktop.ps1
+.\scripts\build-windows-release.ps1
 ```
 
-The production desktop client launches the bundled Python market-data service and Java backend without relying on system Python, a JDK, MySQL, or the source tree. User data and logs live under `%APPDATA%\QuantGuard\`. Runtime staging, Rust target output, and installers are Git-ignored. The current internal installer is unsigned.
+The production desktop client launches the bundled Python market-data service and Java backend without relying on system Python, a JDK, MySQL, or the source tree. User data and logs live under `%APPDATA%\QuantGuard\`. Runtime staging, Rust target output, and installers are Git-ignored. The current release candidate is unsigned, so Windows may display a SmartScreen warning.
 
 ### API Configuration
 

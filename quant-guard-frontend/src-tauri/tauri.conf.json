@@ -18,6 +18,7 @@
         "minWidth": 1050,
         "minHeight": 680,
         "center": true,
+        "decorations": false,
         "resizable": true,
         "fullscreen": false
       }
@@ -47,6 +48,8 @@
       },
       "nsis": {
         "installMode": "currentUser",
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
         "languages": ["SimpChinese", "English"],
         "displayLanguageSelector": false
       }

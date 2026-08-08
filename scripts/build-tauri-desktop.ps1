@@ -66,11 +66,18 @@ Push-Location $tauriRoot
 try {
     & $cargo fmt --all -- --check
     Assert-LastExitCode 'Rust format check'
+    & $cargo clippy --all-targets --all-features -- -D warnings
+    Assert-LastExitCode 'Rust clippy'
     & $cargo test
     Assert-LastExitCode 'Rust tests'
 } finally {
     Pop-Location
 }
+
+$targetRoot = Join-Path $tauriRoot 'target'
+$releaseTarget = Join-Path $targetRoot 'release'
+New-Item -ItemType Directory -Path $targetRoot -Force | Out-Null
+Remove-SafeBuildDirectory -Parent $targetRoot -Candidate $releaseTarget
 
 Push-Location $frontendRoot
 try {

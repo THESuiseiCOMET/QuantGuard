@@ -13,6 +13,7 @@ on:
       - "scripts/build-*-runtime.ps1"
       - "scripts/build-desktop-runtimes.ps1"
       - "scripts/build-tauri-desktop.ps1"
+      - "scripts/build-windows-release.ps1"
       - "scripts/stage-tauri-runtimes.ps1"
       - "scripts/test-desktop-runtimes.ps1"
       - "scripts/test-tauri-lifecycle.ps1"
@@ -78,33 +79,29 @@ jobs:
           rustc -V
           cargo -V
 
-      - name: Prepare Python build environment
+      - name: Prepare Python virtual environment
         shell: pwsh
         run: |
           python -m venv quant-guard-market-data-python/.venv
-          & quant-guard-market-data-python/.venv/Scripts/python.exe -m pip install --upgrade pip
-          & quant-guard-market-data-python/.venv/Scripts/python.exe -m pip install `
-            -r quant-guard-market-data-python/requirements.txt `
-            -r quant-guard-market-data-python/requirements-build.txt
 
-      - name: Install frontend dependencies
-        working-directory: quant-guard-frontend
-        run: npm ci
-
-      - name: Install Playwright Chromium
-        working-directory: quant-guard-frontend
-        run: npx playwright install chromium
-
-      - name: Build and verify Tauri desktop application
+      - name: Build and verify Windows release candidate
         shell: pwsh
-        run: ./scripts/build-tauri-desktop.ps1
+        run: ./scripts/build-windows-release.ps1 -SkipDefenderScan
 
-      - name: Upload internal Windows installer and smoke logs
+      - name: Resolve artifact name
+        id: artifact
+        shell: pwsh
+        run: |
+          $shortSha = $env:GITHUB_SHA.Substring(0, 7)
+          "name=quantguard-windows-v1.2.0-$shortSha" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Windows release candidate
         uses: actions/upload-artifact@v4
         with:
-          name: quantguard-windows-desktop-internal
+          name: ${{ steps.artifact.outputs.name }}
           path: |
-            quant-guard-frontend/src-tauri/target/release/bundle/nsis/*-setup.exe
-            quant-guard-frontend/src-tauri/target/desktop-lifecycle-smoke/**/*.log
+            dist/windows-release/QuantGuard_1.2.0_x64-setup.exe
+            dist/windows-release/QuantGuard_1.2.0_x64-setup.exe.sha256
+            dist/windows-release/release-build-summary.md
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 14

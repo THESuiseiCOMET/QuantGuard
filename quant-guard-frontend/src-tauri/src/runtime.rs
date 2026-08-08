@@ -15,6 +15,8 @@ use uuid::Uuid;
 #[cfg(windows)]
 use std::os::windows::io::AsRawHandle;
 #[cfg(windows)]
+use std::os::windows::process::CommandExt;
+#[cfg(windows)]
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
 #[cfg(windows)]
 use windows_sys::Win32::System::JobObjects::{
@@ -22,6 +24,8 @@ use windows_sys::Win32::System::JobObjects::{
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
     SetInformationJobObject, TerminateJobObject,
 };
+#[cfg(windows)]
+use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
 
 const PYTHON_TIMEOUT: Duration = Duration::from_secs(30);
 const BACKEND_TIMEOUT: Duration = Duration::from_secs(60);
@@ -233,19 +237,39 @@ impl DesktopServiceManager {
             inner.snapshot.python_port = None;
             inner.snapshot.backend_port = None;
         }
+        self.append_log(&format!(
+            "starting QuantGuard desktop {}",
+            env!("CARGO_PKG_VERSION")
+        ));
         let manager = Arc::clone(self);
-        thread::spawn(move || {
-            if let Err(error) = manager.start_services() {
+        thread::spawn(move || match manager.start_services() {
+            Ok(()) => {}
+            Err(RuntimeError::Cancelled) => {
+                manager.stop_children();
+                manager.append_log("desktop service startup cancelled");
+            }
+            Err(error) => {
                 let failure_stage = manager.snapshot().status;
                 manager.stop_children();
-                manager.update_snapshot(|snapshot| {
-                    snapshot.status = RuntimeStage::Failed;
-                    snapshot.message = "QuantGuard desktop services failed to start".to_string();
-                    snapshot.failure_stage = Some(format!("{failure_stage:?}"));
-                    snapshot.error = Some(error.to_string());
-                    snapshot.backend_base_url = None;
-                });
-                manager.append_log(&format!("startup failed at {failure_stage:?}: {error}"));
+                let reported = {
+                    let mut inner = manager.inner.lock().expect("desktop runtime lock poisoned");
+                    if is_cancelled_stage(&inner.snapshot.status) {
+                        false
+                    } else {
+                        inner.snapshot.status = RuntimeStage::Failed;
+                        inner.snapshot.message =
+                            "QuantGuard desktop services failed to start".to_string();
+                        inner.snapshot.failure_stage = Some(format!("{failure_stage:?}"));
+                        inner.snapshot.error = Some(error.to_string());
+                        inner.snapshot.backend_base_url = None;
+                        true
+                    }
+                };
+                if reported {
+                    manager.append_log(&format!("startup failed at {failure_stage:?}: {error}"));
+                } else {
+                    manager.append_log("startup failure ignored after shutdown");
+                }
             }
         });
         true
@@ -291,28 +315,28 @@ impl DesktopServiceManager {
 
     fn start_services(&self) -> Result<(), RuntimeError> {
         self.config.prepare()?;
-        self.update_snapshot(|snapshot| {
+        self.update_startup_snapshot(|snapshot| {
             snapshot.status = RuntimeStage::PythonStarting;
             snapshot.message = "Starting local market-data service".to_string();
-        });
+        })?;
         let python_port = self.start_with_retries(ServiceKind::Python)?;
-        self.update_snapshot(|snapshot| {
+        self.update_startup_snapshot(|snapshot| {
             snapshot.status = RuntimeStage::PythonReady;
             snapshot.message = "Local market-data service is ready".to_string();
             snapshot.python_port = Some(python_port);
-        });
+        })?;
 
-        self.update_snapshot(|snapshot| {
+        self.update_startup_snapshot(|snapshot| {
             snapshot.status = RuntimeStage::BackendStarting;
             snapshot.message = "Starting local database and backend".to_string();
-        });
+        })?;
         let backend_port = self.start_with_retries(ServiceKind::Backend)?;
-        self.update_snapshot(|snapshot| {
+        self.update_startup_snapshot(|snapshot| {
             snapshot.status = RuntimeStage::Ready;
             snapshot.message = "QuantGuard is ready".to_string();
             snapshot.backend_port = Some(backend_port);
             snapshot.backend_base_url = Some(format!("http://127.0.0.1:{backend_port}"));
-        });
+        })?;
         self.append_log(&format!(
             "desktop services ready: market-data={python_port}, backend={backend_port}"
         ));
@@ -328,12 +352,24 @@ impl DesktopServiceManager {
                 ServiceKind::Python => self.spawn_python(port),
                 ServiceKind::Backend => self.spawn_backend(port),
             }?;
-            {
+            let mut pending_child = Some(child);
+            let cancelled = {
                 let mut inner = self.inner.lock().expect("desktop runtime lock poisoned");
-                match kind {
-                    ServiceKind::Python => inner.python = Some(child),
-                    ServiceKind::Backend => inner.backend = Some(child),
+                if is_cancelled_stage(&inner.snapshot.status) {
+                    true
+                } else {
+                    match kind {
+                        ServiceKind::Python => inner.python = pending_child.take(),
+                        ServiceKind::Backend => inner.backend = pending_child.take(),
+                    }
+                    false
                 }
+            };
+            if cancelled {
+                if let Some(mut child) = pending_child {
+                    child.stop(&self.client);
+                }
+                return Err(RuntimeError::Cancelled);
             }
             let health_url = match kind {
                 ServiceKind::Python => format!("http://127.0.0.1:{port}/health"),
@@ -344,7 +380,13 @@ impl DesktopServiceManager {
                 ServiceKind::Backend => BACKEND_TIMEOUT,
             };
             match self.wait_for_health(kind, &health_url, timeout) {
-                Ok(()) => return Ok(port),
+                Ok(()) => {
+                    if let Err(error) = self.ensure_not_cancelled() {
+                        self.stop_child(kind);
+                        return Err(error);
+                    }
+                    return Ok(port);
+                }
                 Err(error) => {
                     last_error = Some(error);
                     self.stop_child(kind);
@@ -452,11 +494,23 @@ impl DesktopServiceManager {
     }
 
     fn ensure_not_cancelled(&self) -> Result<(), RuntimeError> {
-        if matches!(self.snapshot().status, RuntimeStage::Stopping) {
+        if is_cancelled_stage(&self.snapshot().status) {
             Err(RuntimeError::Cancelled)
         } else {
             Ok(())
         }
+    }
+
+    fn update_startup_snapshot(
+        &self,
+        update: impl FnOnce(&mut RuntimeSnapshot),
+    ) -> Result<(), RuntimeError> {
+        let mut inner = self.inner.lock().expect("desktop runtime lock poisoned");
+        if is_cancelled_stage(&inner.snapshot.status) {
+            return Err(RuntimeError::Cancelled);
+        }
+        update(&mut inner.snapshot);
+        Ok(())
     }
 
     fn stop_child(&self, kind: ServiceKind) {
@@ -558,6 +612,8 @@ fn spawn_managed(
     command.stdout(Stdio::from(stdout));
     command.stderr(Stdio::from(stderr));
     command.stdin(Stdio::null());
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
     let child = command.spawn().map_err(|source| RuntimeError::Spawn {
         service: name.to_string(),
         source,
@@ -600,6 +656,10 @@ pub fn allocate_loopback_port() -> Result<u16, RuntimeError> {
 
 fn generate_shutdown_token() -> String {
     Uuid::new_v4().to_string()
+}
+
+fn is_cancelled_stage(stage: &RuntimeStage) -> bool {
+    matches!(stage, RuntimeStage::Stopping | RuntimeStage::Stopped)
 }
 
 #[cfg(windows)]
@@ -706,5 +766,13 @@ mod tests {
         let second = generate_shutdown_token();
         assert!(!first.is_empty());
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn stopping_and_stopped_cancel_startup() {
+        assert!(is_cancelled_stage(&RuntimeStage::Stopping));
+        assert!(is_cancelled_stage(&RuntimeStage::Stopped));
+        assert!(!is_cancelled_stage(&RuntimeStage::Starting));
+        assert!(!is_cancelled_stage(&RuntimeStage::Failed));
     }
 }

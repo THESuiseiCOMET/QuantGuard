@@ -9,6 +9,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 $backendProject = Join-Path $repoRoot 'quant-guard-backend'
 $mavenWrapper = Join-Path $backendProject 'mvnw.cmd'
+$pomPath = Join-Path $backendProject 'pom.xml'
 $runtimeRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     Join-Path $repoRoot 'dist\desktop-runtime'
 } else {
@@ -24,6 +25,12 @@ if (-not (Test-Path -LiteralPath $mavenWrapper)) {
 }
 if (-not (Get-Command 'jpackage.exe' -ErrorAction SilentlyContinue)) {
     throw 'jpackage.exe is unavailable. Build with a full Java 21 JDK.'
+}
+
+[xml]$pom = Get-Content -LiteralPath $pomPath
+$backendVersion = $pom.project.version
+if ([string]::IsNullOrWhiteSpace($backendVersion)) {
+    throw "Backend version is missing from $pomPath"
 }
 
 Push-Location $backendProject
@@ -81,7 +88,7 @@ Copy-Item -LiteralPath $jar.FullName -Destination $inputPath
 $jpackageArguments = @(
     '--type', 'app-image',
     '--name', 'QuantGuardBackend',
-    '--app-version', '1.2.0',
+    '--app-version', $backendVersion,
     '--vendor', 'vanyiung',
     '--input', $inputPath,
     '--main-jar', $jar.Name,
@@ -123,5 +130,6 @@ Write-Host "  Launcher: $launcher"
 Write-Host "  JAR: $($jar.Name)"
 Write-Host "  Main-Class: $mainClass"
 Write-Host "  Start-Class: $startClass"
+Write-Host "  Version: $backendVersion"
 Write-Host "  Bundled Java: $runtimeVersion"
 Write-Host ('  Size: {0:N2} MB' -f ($sizeBytes / 1MB))

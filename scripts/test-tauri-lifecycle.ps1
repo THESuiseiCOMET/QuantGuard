@@ -44,6 +44,34 @@ if (Test-Path -LiteralPath $resolvedWorkRoot) {
 }
 New-Item -ItemType Directory -Path $resolvedWorkRoot -Force | Out-Null
 
+function Get-DescendantProcessIds {
+    param([int]$RootProcessId)
+
+    $childrenByParent = @{}
+    foreach ($candidate in @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)) {
+        $parentId = [int]$candidate.ParentProcessId
+        if (-not $childrenByParent.ContainsKey($parentId)) {
+            $childrenByParent[$parentId] = [Collections.Generic.List[int]]::new()
+        }
+        $childrenByParent[$parentId].Add([int]$candidate.ProcessId)
+    }
+
+    $result = [Collections.Generic.List[int]]::new()
+    $pending = [Collections.Generic.Queue[int]]::new()
+    $pending.Enqueue($RootProcessId)
+    while ($pending.Count -gt 0) {
+        $parentId = $pending.Dequeue()
+        if (-not $childrenByParent.ContainsKey($parentId)) {
+            continue
+        }
+        foreach ($childId in $childrenByParent[$parentId]) {
+            $result.Add($childId)
+            $pending.Enqueue($childId)
+        }
+    }
+    return $result.ToArray()
+}
+
 function Invoke-LifecycleScenario {
     param(
         [string]$Name,
@@ -79,13 +107,36 @@ function Invoke-LifecycleScenario {
     if (-not $process.Start()) {
         throw "Tauri lifecycle scenario '$Name' could not start."
     }
-    if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-        $process.Kill()
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $visibleChildWindows = [Collections.Generic.HashSet[string]]::new()
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    while (-not $process.HasExited -and [DateTime]::UtcNow -lt $deadline) {
+        foreach ($childId in @(Get-DescendantProcessIds -RootProcessId $process.Id)) {
+            $child = Get-Process -Id $childId -ErrorAction SilentlyContinue
+            if ($null -ne $child -and $child.MainWindowHandle -ne [IntPtr]::Zero) {
+                $visibleChildWindows.Add("$($child.ProcessName) ($childId)") | Out-Null
+            }
+        }
+        if (-not $process.HasExited) {
+            Start-Sleep -Milliseconds 200
+        }
+    }
+    $timedOut = -not $process.HasExited
+    if ($timedOut) {
+        $process.Kill($true)
         $process.WaitForExit()
+    }
+    $stdoutTask.GetAwaiter().GetResult() |
+        Set-Content -LiteralPath $stdoutPath -Encoding UTF8
+    $stderrTask.GetAwaiter().GetResult() |
+        Set-Content -LiteralPath $stderrPath -Encoding UTF8
+    if ($timedOut) {
         throw "Tauri lifecycle scenario '$Name' timed out after $TimeoutSeconds seconds."
     }
-    $process.StandardOutput.ReadToEnd() | Set-Content -LiteralPath $stdoutPath -Encoding UTF8
-    $process.StandardError.ReadToEnd() | Set-Content -LiteralPath $stderrPath -Encoding UTF8
+    if ($visibleChildWindows.Count -gt 0) {
+        throw "Tauri lifecycle scenario '$Name' opened child windows: $($visibleChildWindows -join ', ')"
+    }
     $exitCode = $process.ExitCode
     if ($exitCode -ne 0) {
         $stderr = if (Test-Path -LiteralPath $stderrPath) {

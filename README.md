@@ -45,8 +45,9 @@ QuantGuard/
 - 模拟账户及其投资组合管理；
 - 行情中心，支持按代码或名称搜索并添加 A 股股票、ETF 和指数，查看未复权日 K、持仓和收益；
 - 模拟订单与成交管理，支持创建、执行和取消模拟限价订单；
-- 回本计算器；
-- 设置中心，可向当前运行的后端进程配置 Tushare Token；行情 Provider 通过配置文件或环境变量显式切换。
+- 回本计算器。
+
+桌面客户端默认使用无需 Token 的 Python 行情服务。Tushare 仍作为可选 Provider 保留，可在开发或服务器模式中通过配置文件或环境变量显式启用；桌面界面不展示 Token 设置页。
 
 行情数据统一使用十进制字符串传输。BaoStock 和 AKShare 的成交量按 `volume / 100` 转换为 `volumeLots`，成交额以人民币元保存到 `amountCny`；新浪指数接口没有成交额时暂存为 `0`。首条可用日线没有昨收时，昨收、涨跌额和涨跌幅保持为空，不伪造为零。
 
@@ -174,23 +175,37 @@ http://localhost:5173
 - 后端集成 CI：后端变更的 push、pull request 和手动触发时，使用 Docker/Testcontainers 运行事务与数据库结构集成测试；
 - Python 行情 CI：Python 行情服务变更时安装锁定版本依赖，运行离线测试和模块编译；
 - 前端 CI：push 和 pull request 时运行 `npm ci`、类型检查、lint、浏览器 E2E 和构建；
-- Windows 桌面 CI：构建两套自包含运行时、Tauri 客户端和 NSIS 内部安装包，并执行离线生命周期 smoke test。
+- Windows 桌面 CI：构建两套自包含运行时、Tauri 客户端和 NSIS 候选安装包，执行离线生命周期 smoke test，并生成 SHA-256 校验文件。
 
 ### 项目状态
 
 QuantGuard V1.1 提供本地模拟交易和无 Token 历史行情底座。
 
-V1.2-A 开发分支新增 Windows 桌面运行底座：后端可通过 H2 File 在没有 MySQL 的环境中持久运行，但尚未生成桌面客户端或安装包。
+V1.2-A 完成 Windows 桌面运行底座：后端可通过 H2 File 在没有 MySQL 的环境中持久运行。
 
-V1.2-B 开发提供两套 Windows 自包含运行目录：Python 行情服务使用 PyInstaller `onedir`，Spring Boot 后端使用 `jpackage --type app-image` 并携带 Java 21 Runtime。它们用于后续 Tauri sidecar 集成，目前仍不是安装包。
+V1.2-B 提供两套 Windows 自包含运行目录：Python 行情服务使用 PyInstaller `onedir`，Spring Boot 后端使用 `jpackage --type app-image` 并携带 Java 21 Runtime。
 
-V1.2-C 开发将现有 Vue 界面和两套运行时装入 Tauri 2。客户端负责动态选择本机回环端口、依次启动 Python 与 Java、等待健康检查，并在退出时清理其创建的进程树。构建未签名内部安装包：
+V1.2-C 将现有 Vue 界面和两套运行时装入 Tauri 2。客户端负责动态选择本机回环端口、依次启动 Python 与 Java、等待健康检查，并在退出时清理其创建的进程树。
+
+V1.2-D 使用统一脚本构建未签名 Windows 发布候选包：
 
 ```powershell
-.\scripts\build-tauri-desktop.ps1
+.\scripts\build-windows-release.ps1
 ```
 
-安装包位于 `quant-guard-frontend\src-tauri\target\release\bundle\nsis\`。默认数据与日志仍保存在 `%APPDATA%\QuantGuard\`，不写入安装目录。当前安装包仅供内部测试，未签名，Windows 可能显示 SmartScreen 提示。
+候选安装包、SHA-256 和构建摘要位于被 Git 忽略的 `dist\windows-release\`。默认数据与日志仍保存在 `%APPDATA%\QuantGuard\`，不写入安装目录。当前社区候选版本未进行商业代码签名，Windows 可能显示 SmartScreen 提示。
+
+### Windows 安装与数据
+
+- 系统：Windows 11 x64；安装方式为当前用户安装，不要求预装 Python、JDK、MySQL、Node.js 或 Rust。
+- WebView2：安装包使用在线 bootstrapper 策略；缺少 WebView2 时需要网络完成依赖安装，因此当前安装包不承诺完全离线安装。
+- 数据目录：`%APPDATA%\QuantGuard\data\`。
+- 日志目录：`%APPDATA%\QuantGuard\logs\`。
+- 卸载策略：卸载应用默认保留 `%APPDATA%\QuantGuard\` 中的模拟交易数据；需要彻底清除时，请在确认备份后手动删除该目录。
+- 备份：完全退出 QuantGuard 并确认后台进程结束后，复制整个 `%APPDATA%\QuantGuard\data\` 目录。恢复前同样先关闭客户端和后台进程，再用备份目录替换数据目录。不建议在 H2 正在运行时直接复制数据库文件。
+- 网络：已有账户、订单、持仓和本地 K 线可离线查看；搜索新证券和同步行情需要访问外部数据源。
+
+详细变化、安装说明与已知限制见 [V1.2.0 发布说明](docs/releases/v1.2.0.md)。
 
 准备好项目虚拟环境中的运行与构建依赖后，可从仓库根目录执行：
 
@@ -223,9 +238,9 @@ desktop-runtime/
 
 后端核心模拟链路已经覆盖模拟账户、投资组合、证券标的、订单、成交、资金流水和风控检查。
 
-V1.1 支持上交所和深交所普通 A 股、ETF 与指数的目录搜索和历史未复权日线。股票与 ETF 可以参与模拟交易，指数仅用于行情展示。证券目录使用六小时进程内缓存：首次加载依赖网络，Python 服务重启后会重新建立缓存，上游不可用时首次搜索可能失败。实时行情、分钟行情、复权行情、自动撮合、回测、策略执行、登录权限、正式签名发布、生产部署和真实券商接入不在当前版本范围。
+V1.2 支持上交所和深交所普通 A 股、ETF 与指数的目录搜索和历史未复权日线。股票与 ETF 可以参与模拟交易，指数仅用于行情展示。证券目录使用六小时进程内缓存：首次加载依赖网络，Python 服务重启后会重新建立缓存，上游不可用时首次搜索可能失败。ETF 上游存在偶发不可用；客户端会显示明确错误，本地已有数据不受影响。实时行情、分钟行情、复权行情、自动撮合、回测、策略执行、登录权限、代码签名、自动更新和真实券商接入不在当前版本范围。
 
-设置中心提交的 Tushare Token 只保存在当前后端进程内存中，不写入仓库或本地配置文件；后端重启后需要重新配置。
+Tushare Provider 仍可在开发或服务器模式中通过环境变量配置，但桌面客户端默认使用无 Token 行情服务并隐藏相关设置入口。
 
 ### 安全说明
 
@@ -282,8 +297,9 @@ Current frontend pages include:
 - simulation accounts with nested investment portfolio management;
 - a market center with code/name search for A-share stocks, ETFs, and indexes, unadjusted daily candlesticks, positions, and returns;
 - simulated order and trade management, including creation, execution, and cancellation of simulated limit orders;
-- a recovery calculator;
-- a settings center that configures a Tushare token in the currently running backend; Provider selection remains an explicit configuration or environment setting.
+- a recovery calculator.
+
+The desktop client defaults to the token-free Python market-data service. Tushare remains an optional Provider for development or server mode through explicit configuration or environment variables; the desktop UI does not expose a token settings page.
 
 Market-data decimals are transferred as strings. BaoStock and AKShare volume is converted with `volume / 100` into `volumeLots`, while amount in CNY yuan is stored as `amountCny`; Sina index data currently uses `0` when the upstream response has no amount field. The first available bar keeps previous close, change, and percentage change null when no earlier close exists.
 
@@ -411,23 +427,37 @@ The repository currently includes:
 - backend integration CI: runs Docker/Testcontainers transaction and schema tests for backend changes on push, pull request, or manual dispatch;
 - Python market-data CI: installs pinned dependencies and runs offline tests plus module compilation for Python service changes;
 - frontend CI: runs `npm ci`, type check, lint, browser E2E tests, and build on push and pull request;
-- Windows desktop CI: builds both self-contained runtimes, the Tauri client, and an internal NSIS installer, then runs offline lifecycle smoke tests.
+- Windows desktop CI: builds both self-contained runtimes, the Tauri client, and an NSIS release candidate, runs offline lifecycle smoke tests, and generates a SHA-256 checksum.
 
 ### Project Status
 
 QuantGuard V1.1 provides a local trading simulator with a token-free historical market-data foundation.
 
-The V1.2-A development branch adds a Windows desktop runtime foundation: the backend can persist with H2 File without MySQL, but no desktop client or installer is produced yet.
+V1.2-A completes the Windows desktop runtime foundation: the backend persists with H2 File without MySQL.
 
-V1.2-B development produces two self-contained Windows runtime directories: a PyInstaller `onedir` market-data service and a Spring Boot `jpackage --type app-image` with its Java 21 Runtime. They are inputs for later Tauri sidecar integration, not installers.
+V1.2-B provides two self-contained Windows runtime directories: a PyInstaller `onedir` market-data service and a Spring Boot `jpackage --type app-image` with its Java 21 Runtime.
 
-V1.2-C development embeds the existing Vue UI and both runtime directories in Tauri 2. The client chooses dynamic loopback ports, starts Python and Java in order, waits for health checks, and cleans up its child process trees on exit. Build the unsigned internal installer with:
+V1.2-C embeds the existing Vue UI and both runtime directories in Tauri 2. The client chooses dynamic loopback ports, starts Python and Java in order, waits for health checks, and cleans up its child process trees on exit.
+
+V1.2-D builds the unsigned Windows release candidate with:
 
 ```powershell
-.\scripts\build-tauri-desktop.ps1
+.\scripts\build-windows-release.ps1
 ```
 
-The installer is written to `quant-guard-frontend\src-tauri\target\release\bundle\nsis\`. Data and logs remain under `%APPDATA%\QuantGuard\`, outside the installation directory. This internal build is not code-signed, so Windows SmartScreen may display a warning.
+The installer, SHA-256 checksum, and build summary are written under the Git-ignored `dist\windows-release\` directory. Data and logs remain under `%APPDATA%\QuantGuard\`, outside the installation directory. This community release candidate is not commercially code-signed, so Windows SmartScreen may display a warning.
+
+### Windows Installation And Data
+
+- System: Windows 11 x64. The current-user installer does not require a system Python, JDK, MySQL, Node.js, or Rust.
+- WebView2: the installer uses the online bootstrapper strategy. A machine without WebView2 needs network access to install that dependency, so the current installer is not guaranteed to install fully offline.
+- Data directory: `%APPDATA%\QuantGuard\data\`.
+- Log directory: `%APPDATA%\QuantGuard\logs\`.
+- Uninstall policy: uninstalling the application keeps simulation data under `%APPDATA%\QuantGuard\` by default. Delete that directory manually only after confirming a backup.
+- Backup: fully exit QuantGuard and confirm its background processes have stopped, then copy the entire `%APPDATA%\QuantGuard\data\` directory. Stop the client and services before restoring it. Do not copy live H2 files while the application is running.
+- Network: existing accounts, orders, positions, and local candlesticks remain viewable offline. New instrument search and market-data synchronization require upstream network access.
+
+See the [V1.2.0 release notes](docs/releases/v1.2.0.md) for changes, installation details, and known limitations.
 
 After preparing the project virtual environment and packaging dependency, build from the repository root:
 
@@ -460,9 +490,9 @@ H2 2.4 currently produces Flyway's warning that this newer H2 release has not be
 
 The backend core simulation loop is implemented through simulated accounts, portfolios, instruments, orders, trades, cash ledger records, and risk checks.
 
-V1.1 supports catalog search and historical unadjusted daily bars for SSE/SZSE A-share stocks, ETFs, and indexes. Stocks and ETFs can participate in simulation, while indexes are read-only market references. The catalog uses a six-hour in-process cache: its first load requires network access, a Python service restart rebuilds it, and an upstream outage can prevent the initial search. Real-time quotes, minute bars, adjusted prices, automatic matching, backtesting, strategies, authentication, the desktop client, production deployment, and real brokerage access remain outside this release.
+V1.2 supports catalog search and historical unadjusted daily bars for SSE/SZSE A-share stocks, ETFs, and indexes. Stocks and ETFs can participate in simulation, while indexes are read-only market references. The catalog uses a six-hour in-process cache: its first load requires network access, a Python service restart rebuilds it, and an upstream outage can prevent the initial search. ETF upstream availability is intermittent; the client reports a clear error and keeps existing local data intact. Real-time quotes, minute bars, adjusted prices, automatic matching, backtesting, strategies, authentication, code signing, automatic updates, and real brokerage access remain outside this release.
 
-The settings page keeps a submitted Tushare token only in the current backend process. It does not write the token to the repository or a local configuration file, so the token must be configured again after a backend restart.
+The Tushare Provider remains available through environment configuration in development or server mode. The desktop client defaults to token-free market data and hides the related settings entry.
 
 ### Safety Notice
 

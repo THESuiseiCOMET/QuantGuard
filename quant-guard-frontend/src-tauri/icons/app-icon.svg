@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect
+    x="32"
+    y="32"
+    width="448"
+    height="448"
+    rx="112"
+    fill="#ffffff"
+    stroke="#e5e7eb"
+    stroke-width="8"
+  />
+  <path
+    d="M156 174v82"
+    fill="none"
+    stroke="#ef4444"
+    stroke-linecap="round"
+    stroke-width="24"
+  />
+  <path
+    d="M206 118v108"
+    fill="none"
+    stroke="#22c55e"
+    stroke-linecap="round"
+    stroke-width="24"
+  />
+  <path
+    d="M256 150v132"
+    fill="none"
+    stroke="#ef4444"
+    stroke-linecap="round"
+    stroke-width="24"
+  />
+  <path
+    d="M306 86v126"
+    fill="none"
+    stroke="#22c55e"
+    stroke-linecap="round"
+    stroke-width="24"
+  />
+  <path
+    d="M356 126v116"
+    fill="none"
+    stroke="#ef4444"
+    stroke-linecap="round"
+    stroke-width="24"
+  />
+  <text
+    x="256"
+    y="372"
+    fill="#111827"
+    font-family="Segoe UI, Arial, sans-serif"
+    font-size="52"
+    font-weight="600"
+    text-anchor="middle"
+  >QuantGuard</text>
+</svg>

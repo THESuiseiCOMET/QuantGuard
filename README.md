@@ -239,8 +239,3 @@ desktop-runtime/
 V1.2 支持上交所和深交所普通 A 股、ETF 与指数的目录搜索和历史未复权日线。股票与 ETF 可以参与模拟交易，指数仅用于行情展示。证券目录使用六小时进程内缓存：首次加载依赖网络，Python 服务重启后会重新建立缓存，上游不可用时首次搜索可能失败。ETF 上游存在偶发不可用；客户端会显示明确错误，本地已有数据不受影响。实时行情、分钟行情、复权行情、自动撮合、回测、策略执行、登录权限、代码签名、自动更新和真实券商接入不在当前版本范围。
 
 Tushare Provider 仍可在开发或服务器模式中通过环境变量配置，但桌面客户端默认使用无 Token 行情服务并隐藏相关设置入口。
-
-
-
-
-Keep real passwords, API keys, tokens, private keys, broker credentials, account identifiers, logs, local configuration files, and private trading data out of Git.

@@ -10,10 +10,6 @@ public class MarketDataProperties {
 
     private String provider = "python";
 
-    private String baseUrl = "https://api.tushare.pro";
-
-    private String token = "";
-
     private LocalDate defaultStartDate = LocalDate.of(1990, 1, 1);
 
     private boolean autoSyncEnabled = false;
@@ -30,22 +26,6 @@ public class MarketDataProperties {
 
     public void setProvider(String provider) {
         this.provider = provider;
-    }
-
-    public String getBaseUrl() {
-        return baseUrl;
-    }
-
-    public void setBaseUrl(String baseUrl) {
-        this.baseUrl = baseUrl;
-    }
-
-    public String getToken() {
-        return token;
-    }
-
-    public void setToken(String token) {
-        this.token = token;
     }
 
     public LocalDate getDefaultStartDate() {

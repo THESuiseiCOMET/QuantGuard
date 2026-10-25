@@ -168,7 +168,9 @@ src/main/resources/application-local.yaml
 
 ## 行情数据配置
 
-V1.1 默认通过本机 Python 服务获取无 Token 历史行情：
+V1.3 仅支持 Python Provider，旧 Token 配置接口已移除；不需要任何行情 Token。自动同步只由显式启用配置控制。
+
+通过本机 Python 服务获取无 Token 历史行情：
 
 - 证券基础信息和类型：BaoStock；
 - 证券目录搜索：BaoStock 股票与 ETF 目录，加上 AKShare 新浪指数目录；
@@ -187,7 +189,7 @@ PowerShell 示例：
 ```powershell
 $env:MARKET_DATA_PROVIDER="python"
 $env:PYTHON_MARKET_DATA_BASE_URL="http://127.0.0.1:8001"
-$env:MARKET_DATA_AUTO_SYNC_ENABLED="true"
+$env:MARKET_DATA_AUTO_SYNC_ENABLED="false" # Explicitly set true only to opt in
 ```
 
 默认配置：
@@ -195,21 +197,12 @@ $env:MARKET_DATA_AUTO_SYNC_ENABLED="true"
 - `MARKET_DATA_PROVIDER` 默认 `python`；
 - `PYTHON_MARKET_DATA_BASE_URL` 默认 `http://127.0.0.1:8001`；
 - Python 连接超时默认 3 秒，读取超时默认 30 秒；
-- `TUSHARE_BASE_URL` 默认 `https://api.tushare.pro`；
-- `TUSHARE_TOKEN` 默认空；
 - `MARKET_DATA_DEFAULT_START_DATE` 默认 `1990-01-01`；
 - `MARKET_DATA_AUTO_SYNC_ENABLED` 默认 `false`；
 - `MARKET_DATA_AUTO_SYNC_CRON` 默认工作日 18:00；
 - 自动同步默认关闭。
 
-需要保留 Tushare 时可切换：
-
-```powershell
-$env:MARKET_DATA_PROVIDER="tushare"
-$env:TUSHARE_TOKEN="your-local-token"
-```
-
-Python 服务不可用或 Tushare Token 缺失都不会阻止 Spring Boot 启动，只在实际行情调用时返回明确错误。当前范围支持按代码或名称搜索上交所、深交所普通 A 股、ETF 和指数；股票与 ETF 可参与模拟交易，指数仅支持只读未复权日线。北交所、港股、美股、分钟线、复权行情、技术指标、回测、策略和真实券商接入不在本阶段范围。
+Python 服务不可用不会阻止 Spring Boot 启动，只在实际行情调用时返回明确错误。当前范围支持按代码或名称搜索上交所、深交所普通 A 股、ETF 和指数；股票与 ETF 可参与模拟交易，指数仅支持只读未复权日线。北交所、港股、美股、分钟线、复权行情、技术指标、回测、策略和真实券商接入不在本阶段范围。
 
 ## 常用验证
 
@@ -296,10 +289,10 @@ SZSE:000001
 历史日线保存规则：
 
 - 价格、涨跌额、涨跌幅、成交量和成交额均使用 DECIMAL；
-- `volume_lots` 保存 Tushare 原始“手”；
-- `amount_cny` 保存人民币元，即 Tushare `amount` 千元乘以 1000；
+- `volume_lots` 保存手数，由 Python 将上游成交量除以 100；
+- `amount_cny` 保存上游人民币元成交额；新浪指数接口没有成交额时保存 `0`；
 - `adjustment_type` 当前固定为 `NONE`；
-- `data_source` 当前为 `TUSHARE`；
+- `data_source` 当前为 `PYTHON`（Python 内部路由到 BaoStock 或 AKShare）；既有历史数据不重写；
 - 停牌日和无数据日期不插入空 K 线。
 
 持仓查询：
@@ -621,7 +614,9 @@ Notes:
 
 ## Market Data Configuration
 
-V1.1 defaults to a local token-free Python adapter:
+V1.3 supports only the local token-free Python adapter. Legacy token configuration endpoints have been removed; scheduled sync requires explicit opt-in.
+
+The adapter provides:
 
 - instrument metadata and types: BaoStock;
 - A-share stock daily bars: BaoStock;
@@ -640,7 +635,7 @@ PowerShell example:
 ```powershell
 $env:MARKET_DATA_PROVIDER="python"
 $env:PYTHON_MARKET_DATA_BASE_URL="http://127.0.0.1:8001"
-$env:MARKET_DATA_AUTO_SYNC_ENABLED="true"
+$env:MARKET_DATA_AUTO_SYNC_ENABLED="false" # Explicitly set true only to opt in
 ```
 
 Defaults:
@@ -648,21 +643,12 @@ Defaults:
 - `MARKET_DATA_PROVIDER` defaults to `python`.
 - `PYTHON_MARKET_DATA_BASE_URL` defaults to `http://127.0.0.1:8001`.
 - Python connect timeout defaults to 3 seconds and read timeout to 30 seconds.
-- `TUSHARE_BASE_URL` defaults to `https://api.tushare.pro`.
-- `TUSHARE_TOKEN` defaults to empty.
 - `MARKET_DATA_DEFAULT_START_DATE` defaults to `1990-01-01`.
 - `MARKET_DATA_AUTO_SYNC_ENABLED` defaults to `false`.
 - `MARKET_DATA_AUTO_SYNC_CRON` defaults to weekdays at 18:00.
 - automatic synchronization is disabled by default.
 
-Tushare remains available as an explicit alternative:
-
-```powershell
-$env:MARKET_DATA_PROVIDER="tushare"
-$env:TUSHARE_TOKEN="your-local-token"
-```
-
-An unavailable Python service or missing Tushare token does not prevent Spring Boot startup; failures are reported only when market-data operations are called. The current scope supports code/name catalog search for SSE/SZSE A-share stocks, ETFs, and indexes. Stocks and ETFs are tradable in the simulator, while indexes are read-only daily-bar benchmarks. Other exchanges, minute bars, adjusted prices, backtesting, strategies, and real broker access remain out of scope.
+An unavailable Python service does not prevent Spring Boot startup; failures are reported only when market-data operations are called. The current scope supports code/name catalog search for SSE/SZSE A-share stocks, ETFs, and indexes. Stocks and ETFs are tradable in the simulator, while indexes are read-only daily-bar benchmarks. Other exchanges, minute bars, adjusted prices, backtesting, strategies, and real broker access remain out of scope.
 
 ## Common Validation
 
@@ -749,10 +735,10 @@ Batch input may be separated by newlines, English commas, Chinese commas, semico
 Historical daily price storage:
 
 - prices, changes, percentage changes, volumes, and amounts use DECIMAL;
-- `volume_lots` stores the provider's original lot volume;
-- `amount_cny` stores CNY yuan, converted from Tushare `amount` in thousand yuan by multiplying by 1000;
+- `volume_lots` stores lots, normalized by Python from upstream volume divided by 100;
+- `amount_cny` stores upstream CNY yuan; Sina index bars use `0` when no amount is provided;
 - `adjustment_type` is currently fixed to `NONE`;
-- `data_source` is currently `TUSHARE`;
+- `data_source` is currently `PYTHON` (internally routed to BaoStock or AKShare); historical records are not rewritten;
 - suspended dates and no-data dates do not create empty bars.
 
 Portfolio positions:

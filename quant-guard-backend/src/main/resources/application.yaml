@@ -13,8 +13,6 @@ mybatis-plus:
 quantguard:
   market-data:
     provider: ${MARKET_DATA_PROVIDER:python}
-    base-url: ${TUSHARE_BASE_URL:https://api.tushare.pro}
-    token: ${TUSHARE_TOKEN:}
     python:
       base-url: ${PYTHON_MARKET_DATA_BASE_URL:http://127.0.0.1:8001}
       connect-timeout: ${PYTHON_MARKET_DATA_CONNECT_TIMEOUT:3s}

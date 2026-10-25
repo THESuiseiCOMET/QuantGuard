@@ -11,8 +11,6 @@ import type {
   ImportPreviewItem,
   InstrumentImportPreviewRequest,
   InstrumentImportResult,
-  MarketDataProviderConfig,
-  UpdateMarketDataProviderConfigRequest,
 } from '@/types/marketData'
 
 const CATALOG_REQUEST_TIMEOUT_MS = 30_000
@@ -47,14 +45,6 @@ export function syncMultipleInstrumentDailyPrices(request: BatchDailyPriceSyncRe
   return http.post('/market-data/daily-prices/sync', request, {
     timeout: MARKET_DATA_OPERATION_TIMEOUT_MS,
   }) as Promise<BatchDailyPriceSyncResult>
-}
-
-export function getMarketDataProviderConfig() {
-  return http.get('/market-data/config') as Promise<MarketDataProviderConfig>
-}
-
-export function updateMarketDataProviderConfig(request: UpdateMarketDataProviderConfigRequest) {
-  return http.put('/market-data/config', request) as Promise<MarketDataProviderConfig>
 }
 
 export function listInstrumentDailyPrices(

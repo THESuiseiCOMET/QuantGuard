@@ -11,8 +11,4 @@ public record MarketSymbol(String symbol, Exchange exchange) {
             default -> exchange.name();
         };
     }
-
-    public String tushareCode() {
-        return canonicalCode();
-    }
 }

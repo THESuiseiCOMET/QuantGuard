@@ -14,14 +14,11 @@ import java.util.Locale;
 public class ConfiguredMarketDataProvider implements MarketDataProvider {
 
     private final MarketDataProperties properties;
-    private final TushareMarketDataProvider tushareProvider;
     private final PythonMarketDataProvider pythonProvider;
 
     public ConfiguredMarketDataProvider(MarketDataProperties properties,
-                                        TushareMarketDataProvider tushareProvider,
                                         PythonMarketDataProvider pythonProvider) {
         this.properties = properties;
-        this.tushareProvider = tushareProvider;
         this.pythonProvider = pythonProvider;
     }
 
@@ -52,7 +49,6 @@ public class ConfiguredMarketDataProvider implements MarketDataProvider {
                 ? ""
                 : properties.getProvider().trim().toLowerCase(Locale.ROOT);
         return switch (provider) {
-            case "tushare" -> tushareProvider;
             case "python" -> pythonProvider;
             default -> throw new MarketDataProviderException(MarketDataProviderErrorType.NOT_CONFIGURED,
                     "Unsupported market data provider: " + properties.getProvider());

@@ -114,12 +114,3 @@ export interface BatchDailyPriceSyncResult {
   skippedCount: number
   items: DailyPriceSyncResult[]
 }
-
-export interface MarketDataProviderConfig {
-  provider: string
-  tokenConfigured: boolean
-}
-
-export interface UpdateMarketDataProviderConfigRequest {
-  token: string
-}

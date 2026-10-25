@@ -19,10 +19,9 @@ class ConfiguredMarketDataProviderTest {
     void selectsPythonProvider() {
         MarketDataProperties properties = new MarketDataProperties();
         properties.setProvider("python");
-        TushareMarketDataProvider tushare = mock(TushareMarketDataProvider.class);
         PythonMarketDataProvider python = mock(PythonMarketDataProvider.class);
         when(python.providerName()).thenReturn("PYTHON");
-        ConfiguredMarketDataProvider provider = new ConfiguredMarketDataProvider(properties, tushare, python);
+        ConfiguredMarketDataProvider provider = new ConfiguredMarketDataProvider(properties, python);
 
         assertEquals("PYTHON", provider.providerName());
         provider.lookupInstruments(List.of());
@@ -31,16 +30,15 @@ class ConfiguredMarketDataProviderTest {
     }
 
     @Test
-    void selectsTushareProviderWithoutChangingExistingImplementation() {
+    void delegatesDailyBarsToPythonProvider() {
         MarketDataProperties properties = new MarketDataProperties();
-        properties.setProvider("tushare");
-        TushareMarketDataProvider tushare = mock(TushareMarketDataProvider.class);
+        properties.setProvider(" PYTHON ");
         PythonMarketDataProvider python = mock(PythonMarketDataProvider.class);
-        ConfiguredMarketDataProvider provider = new ConfiguredMarketDataProvider(properties, tushare, python);
+        ConfiguredMarketDataProvider provider = new ConfiguredMarketDataProvider(properties, python);
 
         provider.fetchDailyBars(List.of(), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 2));
 
-        verify(tushare).fetchDailyBars(List.of(), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 2));
+        verify(python).fetchDailyBars(List.of(), LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 2));
     }
 
     @Test
@@ -49,7 +47,6 @@ class ConfiguredMarketDataProviderTest {
         properties.setProvider("auto");
         ConfiguredMarketDataProvider provider = new ConfiguredMarketDataProvider(
                 properties,
-                mock(TushareMarketDataProvider.class),
                 mock(PythonMarketDataProvider.class));
 
         MarketDataProviderException error = assertThrows(

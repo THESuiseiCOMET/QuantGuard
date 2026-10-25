@@ -571,12 +571,9 @@ async function loadPrices() {
     if (seq !== requestSeq) return
     prices.value = priceRows
     summary.value = priceSummary
-  } catch (error) {
+  } catch {
     if (seq !== requestSeq) return
-    const message = error instanceof Error ? error.message : ''
-    errorMessage.value = message.includes('TUSHARE_TOKEN')
-      ? '行情服务尚未配置。请在“设置”中填写 Tushare Token。'
-      : '历史日线加载失败，请确认后端服务是否已启动。'
+    errorMessage.value = '历史日线加载失败，请确认后端服务是否已启动。'
   } finally {
     if (seq === requestSeq) priceLoading.value = false
   }
@@ -621,11 +618,8 @@ async function previewImport() {
 
   try {
     previewItems.value = await previewInstrumentImport({ codes })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : ''
-    errorMessage.value = message.includes('TUSHARE_TOKEN')
-      ? '行情服务尚未配置。请在“设置”中填写 Tushare Token。'
-      : '导入预览失败，请检查后端服务。'
+  } catch {
+    errorMessage.value = '导入预览失败，请检查后端及 Python 行情服务。'
   } finally {
     previewing.value = false
   }

@@ -242,7 +242,7 @@ class MarketDataServiceImplTest {
     void syncFailsWhenProviderReturnsNoDailyBars() {
         when(securityInstrumentMapper.selectById(1L)).thenReturn(activeInstrument());
         when(dailyPriceMapper.selectOne(any(Wrapper.class))).thenReturn(null);
-        when(marketDataProvider.providerName()).thenReturn("TUSHARE");
+        when(marketDataProvider.providerName()).thenReturn("PYTHON");
         when(marketDataProvider.fetchDailyBars(any(), any(), any())).thenReturn(List.of());
 
         DailyPriceSyncResult result = marketDataService.syncInstrumentDailyPrices(
@@ -320,7 +320,7 @@ class MarketDataServiceImplTest {
         when(securityInstrumentMapper.selectById(1L)).thenReturn(activeInstrument());
         when(dailyPriceMapper.selectList(any())).thenReturn(List.of());
         when(syncLogMapper.selectOne(any())).thenReturn(null);
-        when(marketDataProvider.providerName()).thenReturn("Tushare");
+        when(marketDataProvider.providerName()).thenReturn("Python");
 
         DailyPriceSummaryResponse summary = marketDataService.getDailyPriceSummary(1L);
 

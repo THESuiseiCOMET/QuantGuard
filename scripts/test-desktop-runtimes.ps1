@@ -188,7 +188,6 @@ try {
 
     $backendEnvironment = @{
         QUANTGUARD_DATA_DIR = $dataRoot
-        MARKET_DATA_PROVIDER = 'python'
         PYTHON_MARKET_DATA_BASE_URL = "http://127.0.0.1:$pythonPort"
         QUANTGUARD_DESKTOP_SHUTDOWN_TOKEN = $shutdownToken
     }

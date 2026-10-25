@@ -187,14 +187,12 @@ BaoStock 与 AKShare 的成交量统一按 `volume / 100` 转换为 `volumeLots`
 PowerShell 示例：
 
 ```powershell
-$env:MARKET_DATA_PROVIDER="python"
 $env:PYTHON_MARKET_DATA_BASE_URL="http://127.0.0.1:8001"
 $env:MARKET_DATA_AUTO_SYNC_ENABLED="false" # Explicitly set true only to opt in
 ```
 
 默认配置：
 
-- `MARKET_DATA_PROVIDER` 默认 `python`；
 - `PYTHON_MARKET_DATA_BASE_URL` 默认 `http://127.0.0.1:8001`；
 - Python 连接超时默认 3 秒，读取超时默认 60 秒；
 - `MARKET_DATA_DEFAULT_START_DATE` 默认 `1990-01-01`；
@@ -633,14 +631,12 @@ Start the single-worker service from `quant-guard-market-data-python` before the
 PowerShell example:
 
 ```powershell
-$env:MARKET_DATA_PROVIDER="python"
 $env:PYTHON_MARKET_DATA_BASE_URL="http://127.0.0.1:8001"
 $env:MARKET_DATA_AUTO_SYNC_ENABLED="false" # Explicitly set true only to opt in
 ```
 
 Defaults:
 
-- `MARKET_DATA_PROVIDER` defaults to `python`.
 - `PYTHON_MARKET_DATA_BASE_URL` defaults to `http://127.0.0.1:8001`.
 - Python connect timeout defaults to 3 seconds and read timeout to 60 seconds.
 - `MARKET_DATA_DEFAULT_START_DATE` defaults to `1990-01-01`.

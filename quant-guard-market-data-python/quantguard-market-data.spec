@@ -9,7 +9,7 @@ binaries = []
 hiddenimports = collect_submodules("uvicorn")
 
 for package in ("akshare", "baostock", "py_mini_racer"):
-    package_datas, package_binaries, package_hiddenimports = collect_all(package)
+    package_datas, package_binaries, package_hiddenimports = collect_all(package, include_py_files=False)
     datas += package_datas
     binaries += package_binaries
     hiddenimports += package_hiddenimports
@@ -26,7 +26,7 @@ analysis = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=["pytest", "_pytest"],
     noarchive=False,
     optimize=0,
 )

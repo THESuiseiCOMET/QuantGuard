@@ -20,11 +20,10 @@ spring:
 logging:
   logback:
     rollingpolicy:
-      max-file-size: 10MB
+      max-file-size: 5MB
       max-history: 7
-      total-size-cap: 100MB
+      total-size-cap: 50MB
 
 quantguard:
   market-data:
-    provider: ${MARKET_DATA_PROVIDER:python}
     auto-sync-enabled: ${MARKET_DATA_AUTO_SYNC_ENABLED:false}

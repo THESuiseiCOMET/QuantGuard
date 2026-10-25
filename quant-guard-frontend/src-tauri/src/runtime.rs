@@ -1,6 +1,7 @@
+use crate::rotating_log::{RotatingLog, drain_log};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
-use std::fs::{self, File, OpenOptions};
+use std::fs;
 use std::io::{self, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
@@ -178,6 +179,7 @@ pub struct DesktopServiceManager {
     config: DesktopConfig,
     client: Client,
     inner: Mutex<RuntimeInner>,
+    runtime_log: Mutex<Option<RotatingLog>>,
 }
 
 impl DesktopServiceManager {
@@ -199,6 +201,7 @@ impl DesktopServiceManager {
                 .timeout(Duration::from_secs(2))
                 .build()
                 .expect("local HTTP client configuration must be valid"),
+            runtime_log: Mutex::new(None),
             inner: Mutex::new(RuntimeInner {
                 snapshot,
                 python: None,
@@ -435,7 +438,6 @@ impl DesktopServiceManager {
         command.arg("--server.address=127.0.0.1");
         command.env("SPRING_PROFILES_ACTIVE", "desktop");
         command.env("QUANTGUARD_DATA_DIR", &self.config.data_root);
-        command.env("MARKET_DATA_PROVIDER", "python");
         command.env(
             "PYTHON_MARKET_DATA_BASE_URL",
             format!("http://127.0.0.1:{python_port}"),
@@ -542,7 +544,13 @@ impl DesktopServiceManager {
             .unwrap_or_default()
             .as_secs();
         let path = self.config.log_root.join("desktop-runtime.log");
-        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let Ok(mut guard) = self.runtime_log.lock() else {
+            return;
+        };
+        if guard.is_none() {
+            *guard = RotatingLog::open(path, 1024 * 1024, 2).ok();
+        }
+        if let Some(file) = guard.as_mut() {
             let _ = writeln!(
                 file,
                 "{{\"timestamp\":{timestamp},\"message\":{message:?}}}"
@@ -571,6 +579,7 @@ struct ManagedChild {
     job: JobObject,
     shutdown_url: String,
     shutdown_token: String,
+    log_threads: Vec<thread::JoinHandle<()>>,
 }
 
 impl ManagedChild {
@@ -582,13 +591,16 @@ impl ManagedChild {
         let deadline = Instant::now() + SHUTDOWN_TIMEOUT;
         while Instant::now() < deadline {
             match self.child.try_wait() {
-                Ok(Some(_)) => return,
+                Ok(Some(_)) => break,
                 Ok(None) => thread::sleep(Duration::from_millis(100)),
                 Err(_) => break,
             }
         }
         self.job.terminate();
         let _ = self.child.wait();
+        for handle in self.log_threads.drain(..) {
+            let _ = handle.join();
+        }
     }
 }
 
@@ -599,42 +611,35 @@ fn spawn_managed(
     shutdown_url: String,
     shutdown_token: String,
 ) -> Result<ManagedChild, RuntimeError> {
-    let stdout =
-        create_process_log(log_root, name, "out").map_err(|source| RuntimeError::Spawn {
-            service: name.to_string(),
-            source,
-        })?;
-    let stderr =
-        create_process_log(log_root, name, "err").map_err(|source| RuntimeError::Spawn {
-            service: name.to_string(),
-            source,
-        })?;
-    command.stdout(Stdio::from(stdout));
-    command.stderr(Stdio::from(stderr));
+    let open_log = |stream: &str| {
+        RotatingLog::open(log_root.join(format!("{name}.{stream}.log")), 2 * 1024 * 1024, 2)
+            .map_err(|source| RuntimeError::Spawn { service: name.to_string(), source })
+    };
+    let stdout_log = open_log("out")?;
+    let stderr_log = open_log("err")?;
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
     command.stdin(Stdio::null());
     #[cfg(windows)]
     command.creation_flags(CREATE_NO_WINDOW);
-    let child = command.spawn().map_err(|source| RuntimeError::Spawn {
-        service: name.to_string(),
-        source,
+    let mut child = command.spawn().map_err(|source| RuntimeError::Spawn {
+        service: name.to_string(), source,
     })?;
-    let job = JobObject::new().and_then(|job| {
+    let job = match JobObject::new().and_then(|job| {
         job.assign(&child)?;
         Ok(job)
-    })?;
-    Ok(ManagedChild {
-        child,
-        job,
-        shutdown_url,
-        shutdown_token,
-    })
-}
-
-fn create_process_log(log_root: &Path, name: &str, stream: &str) -> io::Result<File> {
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_root.join(format!("{name}.{stream}.log")))
+    }) {
+        Ok(job) => job,
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error);
+        }
+    };
+    let stdout = child.stdout.take().expect("stdout pipe was configured");
+    let stderr = child.stderr.take().expect("stderr pipe was configured");
+    let log_threads = vec![drain_log(stdout, stdout_log), drain_log(stderr, stderr_log)];
+    Ok(ManagedChild { child, job, shutdown_url, shutdown_token, log_threads })
 }
 
 fn prepare_child_environment(command: &mut Command) {

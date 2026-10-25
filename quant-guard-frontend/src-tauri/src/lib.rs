@@ -1,3 +1,4 @@
+mod rotating_log;
 mod runtime;
 
 use runtime::{DesktopConfig, DesktopServiceManager, RuntimeSnapshot, RuntimeStage};

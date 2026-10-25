@@ -8,8 +8,6 @@ import java.time.LocalDate;
 @ConfigurationProperties(prefix = "quantguard.market-data")
 public class MarketDataProperties {
 
-    private String provider = "python";
-
     private LocalDate defaultStartDate = LocalDate.of(1990, 1, 1);
 
     private int initialLookbackYears = 1;
@@ -18,17 +16,7 @@ public class MarketDataProperties {
 
     private String autoSyncCron = "0 0 18 * * MON-FRI";
 
-    private int batchSize = 20;
-
     private Python python = new Python();
-
-    public String getProvider() {
-        return provider;
-    }
-
-    public void setProvider(String provider) {
-        this.provider = provider;
-    }
 
     public LocalDate getDefaultStartDate() {
         return defaultStartDate;
@@ -63,14 +51,6 @@ public class MarketDataProperties {
 
     public void setAutoSyncCron(String autoSyncCron) {
         this.autoSyncCron = autoSyncCron;
-    }
-
-    public int getBatchSize() {
-        return batchSize;
-    }
-
-    public void setBatchSize(int batchSize) {
-        this.batchSize = batchSize;
     }
 
     public Python getPython() {

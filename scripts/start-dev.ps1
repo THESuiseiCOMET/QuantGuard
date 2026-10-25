@@ -132,12 +132,12 @@ try {
 
     if ($Desktop) {
         $escapedDataRoot = $layout.dataRoot.Replace("'", "''")
-        $backendCommand = "`$env:MARKET_DATA_PROVIDER='python'; " +
+        $backendCommand =
             "`$env:SPRING_PROFILES_ACTIVE='desktop'; " +
             "`$env:QUANTGUARD_DATA_DIR='$escapedDataRoot'; " +
             "& '$mavenWrapper' spring-boot:run"
     } else {
-        $backendCommand = "`$env:MARKET_DATA_PROVIDER='python'; & '$mavenWrapper' spring-boot:run"
+        $backendCommand = "& '$mavenWrapper' spring-boot:run"
     }
     Start-ManagedCommand 'backend' 8080 $backendCommand $backendDir
     Wait-HttpEndpoint 'Spring Boot backend' 'http://127.0.0.1:8080/api/health' 90

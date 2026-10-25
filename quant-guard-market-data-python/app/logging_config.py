@@ -36,8 +36,8 @@ def build_logging_config(log_dir: Path | None) -> dict[str, Any]:
             "class": "logging.handlers.RotatingFileHandler",
             "formatter": "json",
             "filename": str(log_dir / "quantguard-market-data.log"),
-            "maxBytes": 10 * 1024 * 1024,
-            "backupCount": 5,
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 3,
             "encoding": "utf-8",
         }
         active_handlers.append("file")

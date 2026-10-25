@@ -1,10 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import MainLayout from '@/layouts/MainLayout.vue'
-import AccountsView from '@/views/accounts/AccountsView.vue'
-import OrdersView from '@/views/orders/OrdersView.vue'
-import MarketWorkspaceView from '@/views/market-data/MarketWorkspaceView.vue'
-import RecoveryCalculatorView from '@/views/calculator/RecoveryCalculatorView.vue'
-import NotFoundView from '@/views/placeholder/NotFoundView.vue'
+const AccountsView = () => import('@/views/accounts/AccountsView.vue')
+const OrdersView = () => import('@/views/orders/OrdersView.vue')
+const MarketWorkspaceView = () => import('@/views/market-data/MarketWorkspaceView.vue')
+const RecoveryCalculatorView = () => import('@/views/calculator/RecoveryCalculatorView.vue')
+const NotFoundView = () => import('@/views/placeholder/NotFoundView.vue')
 
 export const router = createRouter({
   history: createWebHistory(),

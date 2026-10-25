@@ -22,7 +22,7 @@ def test_baostock_logout_runs_when_query_fails(monkeypatch) -> None:
     monkeypatch.setattr("app.clients.bs.logout", lambda: logout_calls.append(True))
 
     with pytest.raises(MarketDataError) as error:
-        BaoStockClient().lookup_instrument(CanonicalSymbol.parse("600519.SH"))
+        BaoStockClient(isolated=False).lookup_instrument(CanonicalSymbol.parse("600519.SH"))
 
     assert error.value.code == ErrorCode.UPSTREAM_UNAVAILABLE
     assert logout_calls == [True]
@@ -38,7 +38,7 @@ def test_baostock_unreachable_fails_before_login(monkeypatch) -> None:
     monkeypatch.setattr("app.clients.bs.login", lambda: login_calls.append(True))
 
     with pytest.raises(MarketDataError) as error:
-        BaoStockClient().lookup_instrument(CanonicalSymbol.parse("600519.SH"))
+        BaoStockClient(isolated=False).lookup_instrument(CanonicalSymbol.parse("600519.SH"))
 
     assert error.value.code == ErrorCode.UPSTREAM_UNAVAILABLE
     assert login_calls == []

@@ -15,7 +15,7 @@ class MetadataOnlyBaoStock:
     def daily_bars(self, _symbol, _start_date: date, _end_date: date):
         raise AssertionError("Network client must not be called by this test")
 
-    def list_instruments(self):
+    def search_instruments(self, _query):
         return [
             CatalogInstrument(
                 CanonicalSymbol.parse("600519.SH"),
@@ -131,3 +131,16 @@ def test_desktop_shutdown_is_hidden_without_token(monkeypatch) -> None:
     response = client.post("/internal/desktop/shutdown")
 
     assert response.status_code == 404
+
+
+def test_search_timeout_preserves_error_code_and_message(monkeypatch) -> None:
+    from app.errors import ErrorCode, MarketDataError
+
+    class TimedOut:
+        def search_instruments(self, _query, _limit):
+            raise MarketDataError(ErrorCode.TIMEOUT, "Catalog source timed out")
+
+    monkeypatch.setattr(main_module, "service", TimedOut())
+    response = TestClient(main_module.app).post("/v1/instruments/search", json={"query": "600519"})
+    assert response.status_code == 504
+    assert response.json() == {"code": "TIMEOUT", "message": "Catalog source timed out"}

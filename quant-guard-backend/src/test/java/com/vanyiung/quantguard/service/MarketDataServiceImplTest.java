@@ -329,6 +329,18 @@ class MarketDataServiceImplTest {
         assertNull(summary.latestClose());
     }
 
+    @Test
+    void firstImplicitSyncUsesOneYearWhileFullRefreshKeepsHistoricalFloor() {
+        when(securityInstrumentMapper.selectById(1L)).thenReturn(activeInstrument());
+        when(dailyPriceMapper.selectOne(any(Wrapper.class))).thenReturn(null);
+        when(marketDataProvider.fetchDailyBars(any(), any(), any())).thenReturn(List.of());
+        LocalDate end = LocalDate.of(2026, 10, 23);
+        marketDataService.syncInstrumentDailyPrices(1L, new DailyPriceSyncRequest(null, end, false), "MANUAL");
+        verify(marketDataProvider).fetchDailyBars(any(), org.mockito.ArgumentMatchers.eq(end.minusYears(1)), org.mockito.ArgumentMatchers.eq(end));
+        marketDataService.syncInstrumentDailyPrices(1L, new DailyPriceSyncRequest(null, end, true), "MANUAL");
+        verify(marketDataProvider).fetchDailyBars(any(), org.mockito.ArgumentMatchers.eq(LocalDate.of(2020, 1, 1)), org.mockito.ArgumentMatchers.eq(end));
+    }
+
     private SecurityInstrument activeInstrument() {
         SecurityInstrument instrument = new SecurityInstrument();
         instrument.setId(1L);

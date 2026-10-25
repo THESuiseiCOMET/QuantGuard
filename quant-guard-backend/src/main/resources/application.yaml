@@ -16,8 +16,9 @@ quantguard:
     python:
       base-url: ${PYTHON_MARKET_DATA_BASE_URL:http://127.0.0.1:8001}
       connect-timeout: ${PYTHON_MARKET_DATA_CONNECT_TIMEOUT:3s}
-      read-timeout: ${PYTHON_MARKET_DATA_READ_TIMEOUT:30s}
+      read-timeout: ${PYTHON_MARKET_DATA_READ_TIMEOUT:60s}
     default-start-date: ${MARKET_DATA_DEFAULT_START_DATE:1990-01-01}
+    initial-lookback-years: ${MARKET_DATA_INITIAL_LOOKBACK_YEARS:1}
     auto-sync-enabled: ${MARKET_DATA_AUTO_SYNC_ENABLED:false}
     auto-sync-cron: ${MARKET_DATA_AUTO_SYNC_CRON:0 0 18 * * MON-FRI}
     batch-size: 20

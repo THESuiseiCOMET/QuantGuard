@@ -14,7 +14,7 @@ The service does not access the QuantGuard database.
 
 BaoStock and AKShare volume is normalized with `volume / 100` into `volume_lots`. Upstream amount is kept in CNY yuan as `amount_cny`; the Sina index endpoint has no amount field, so index bars currently use `0`. The first available bar keeps `previous_close`, `change`, and `percentage_change` null when no earlier close exists.
 
-The stock/ETF/index catalog uses a six-hour in-process cache. The first catalog load requires upstream network access, and restarting the service rebuilds the cache. If the upstream source is unavailable before the first successful load, catalog search can fail with a structured availability error.
+Code/name search is performed on demand; supplemental source catalogs use a six-hour in-process cache. Restarting the service rebuilds those caches. Upstream calls are bounded and failures return structured errors. See V1.3 reliability changes below.
 
 ## Run
 
@@ -94,3 +94,15 @@ dist\desktop-runtime\market-data\
 ```
 
 The runtime does not read `.venv`, source files, or desktop PoC paths. It remains a console-enabled `onedir` build for diagnosability and is not a Windows installer.
+
+## V1.3 reliability changes
+
+Search now uses BaoStock server-side code/name filters instead of downloading its entire catalog. Enter a full six-digit code (optionally `.SH`/`.SZ`) or a name. Incomplete numeric input returns no results without starting a market-wide download. Sina index metadata supplements ambiguous codes and names. Slow AKShare stock/ETF catalogs are fallbacks only; primary listing dates, types and status are retained. Supplemental source catalogs are cached for six hours, and recent search metadata is bounded to 512 entries.
+
+Each blocking vendor SDK operation runs in a short-lived spawned worker, with a hard deadline (BaoStock 8 seconds, AKShare 12 seconds). At most two workers run concurrently; timed-out workers are terminated and joined instead of accumulating hung threads. This is needed because the pinned SDK functions do not consistently expose request timeouts. Packaged CLI startup calls `multiprocessing.freeze_support()` before importing the app. Health checks do not start these workers or call the internet.
+
+Stock daily bars fall back to AKShare on timeout, unavailable/malformed responses or empty primary data. ETF/index amount is optional: valid provided amounts are retained, missing/empty values use the existing `0` sentinel because H2's amount field is non-null. This means unknown amount, not an estimated traded value. A-share stock amount remains required. All rows are filtered to the requested dates; missing previous close remains null.
+
+Java's default Python read timeout is 60 seconds, and the frontend catalog timeout is 65 seconds. Individual upstream operations time out first. Initial implicit sync/import now requests one year (`MARKET_DATA_INITIAL_LOOKBACK_YEARS`, valid 1–30), clamped to the historical floor/listing date; explicit start dates and full refresh remain available. Automatic sync is still disabled by default.
+
+Python errors preserve TIMEOUT/availability codes and log the source failure. Real-network tests remain opt-in and now include an index plus cold-start search. The retained BaoStock version is 0.9.3: inspecting 0.9.4 showed API-key/VIP changes, not a timeout fix, so no blind dependency upgrade was made.

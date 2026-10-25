@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import logging
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from threading import Lock
 from time import monotonic
@@ -28,6 +29,7 @@ _TYPE_MAP = {
 }
 _PERCENT_SCALE = Decimal("0.000001")
 _CATALOG_TTL_SECONDS = 6 * 60 * 60
+log = logging.getLogger(__name__)
 
 
 class MarketDataService:
@@ -38,7 +40,8 @@ class MarketDataService:
     ) -> None:
         self.baostock = baostock_client or BaoStockClient()
         self.akshare = akshare_client or AkShareClient()
-        self._catalog_cache: tuple[float, list[CatalogInstrument]] | None = None
+        self._source_cache: dict[str, tuple[float, list[CatalogInstrument]]] = {}
+        self._known_metadata: dict[str, tuple[float, RawInstrumentMetadata]] = {}
         self._catalog_lock = Lock()
 
     def lookup_instruments(self, raw_symbols: Iterable[str]) -> InstrumentLookupResponse:
@@ -62,17 +65,41 @@ class MarketDataService:
 
     def search_instruments(self, query: str, limit: int) -> InstrumentSearchResponse:
         normalized = query.strip().upper()
-        matches = [
-            item
-            for item in self._catalog_entries()
-            if normalized in item.symbol.code
-            or normalized in item.symbol.canonical
-            or normalized in item.metadata.name.upper()
-        ]
+        # Do not start exchange-wide downloads while the user is typing a code.
+        if not normalized or (normalized.isdigit() and len(normalized) != 6):
+            return InstrumentSearchResponse(results=[])
+        errors = []
+        merged = {}
+        try:
+            for item in self.baostock.search_instruments(normalized):
+                merged[item.symbol.canonical] = item
+        except MarketDataError as exc:
+            errors.append(exc)
+            for kind in (["etfs"] if "ETF" in normalized or normalized.startswith(("5", "15")) else ["stocks"]):
+                try:
+                    for item in self._source_catalog(kind):
+                        merged.setdefault(item.symbol.canonical, item)
+                except MarketDataError as fallback_error:
+                    errors.append(fallback_error)
+        # A six-digit 6xxxxx/3xxxxx stock cannot collide with an index.
+        if not normalized[:6].isdigit() or normalized.startswith(("000", "399")):
+            try:
+                for item in self._source_catalog("indices"):
+                    merged.setdefault(item.symbol.canonical, item)
+            except MarketDataError as exc:
+                errors.append(exc)
+        matches = [item for item in merged.values() if normalized in item.symbol.code
+                   or normalized in item.symbol.canonical or normalized in item.metadata.name.upper()]
+        if not merged and errors:
+            raise errors[0]
         matches.sort(key=lambda item: _catalog_sort_key(item, normalized))
-        return InstrumentSearchResponse(
-            results=[self._metadata(item.symbol, item.metadata) for item in matches[:limit]]
-        )
+        selected = matches[:limit]
+        with self._catalog_lock:
+            for item in selected:
+                self._known_metadata[item.symbol.canonical] = (monotonic(), item.metadata)
+            while len(self._known_metadata) > 512:
+                self._known_metadata.pop(next(iter(self._known_metadata)))
+        return InstrumentSearchResponse(results=[self._metadata(item.symbol, item.metadata) for item in selected])
 
     def daily_bars(
         self,
@@ -105,6 +132,7 @@ class MarketDataService:
                     )
                 results.append(DailyBarsResult(symbol=symbol.canonical, bars=bars))
             except MarketDataError as exc:
+                log.warning("Daily bars failed: symbol=%s code=%s message=%s", display_symbol, exc.code, exc.message)
                 results.append(
                     DailyBarsResult(
                         symbol=display_symbol,
@@ -133,106 +161,67 @@ class MarketDataService:
         )
 
     def _lookup_raw(self, symbol: CanonicalSymbol) -> RawInstrumentMetadata:
-        cached_metadata = self._cached_catalog_metadata(symbol)
-        if cached_metadata is not None:
-            return cached_metadata
-
-        primary_error: MarketDataError | None = None
+        with self._catalog_lock:
+            cached = self._known_metadata.get(symbol.canonical)
+        if cached and monotonic() - cached[0] < _CATALOG_TTL_SECONDS:
+            return cached[1]
         try:
             return self.baostock.lookup_instrument(symbol)
-        except MarketDataError as exc:
-            primary_error = exc
-        for item in self._catalog_entries():
-            if item.symbol == symbol:
-                return item.metadata
-        if (
-            primary_error is not None
-            and primary_error.code != ErrorCode.INSTRUMENT_NOT_FOUND
-        ):
+        except MarketDataError as primary_error:
+            if symbol.suffix == "SH" and symbol.code.startswith("000") or symbol.code.startswith("399"):
+                kind = "indices"
+            elif symbol.suffix == "SH" and symbol.code.startswith("5") or symbol.code.startswith("15"):
+                kind = "etfs"
+            else:
+                kind = "stocks"
+            try:
+                for item in self._source_catalog(kind):
+                    if item.symbol == symbol:
+                        return item.metadata
+            except MarketDataError:
+                raise primary_error
             raise primary_error
-        raise MarketDataError(
-            ErrorCode.INSTRUMENT_NOT_FOUND,
-            f"Instrument not found: {symbol.canonical}",
-        )
 
-    def _cached_catalog_metadata(
-        self,
-        symbol: CanonicalSymbol,
-    ) -> RawInstrumentMetadata | None:
-        now = monotonic()
+    def _source_catalog(self, kind: str) -> list[CatalogInstrument]:
         with self._catalog_lock:
-            if self._catalog_cache is None:
-                return None
-            cached_at, catalog = self._catalog_cache
-            if now - cached_at >= _CATALOG_TTL_SECONDS:
-                return None
-            for item in catalog:
-                if item.symbol == symbol:
-                    return item.metadata
-        return None
+            cached = self._source_cache.get(kind)
+            if cached and monotonic() - cached[0] < _CATALOG_TTL_SECONDS:
+                return cached[1]
+            loaders = {"stocks": self.akshare.stock_catalog, "indices": self.akshare.index_catalog}
+            if kind == "etfs":
+                loader = self.akshare.etf_catalog
+            else:
+                loader = loaders[kind]
+            items = loader()
+            self._source_cache[kind] = (monotonic(), items)
+            return items
 
-    def _catalog_entries(self) -> list[CatalogInstrument]:
-        now = monotonic()
-        with self._catalog_lock:
-            if self._catalog_cache is not None and now - self._catalog_cache[0] < _CATALOG_TTL_SECONDS:
-                return self._catalog_cache[1]
-
-            merged: dict[str, CatalogInstrument] = {}
-            errors: list[MarketDataError] = []
-            for loader in (
-                self.baostock.list_instruments,
-                self.akshare.stock_catalog,
-                self.akshare.index_catalog,
-            ):
-                try:
-                    for item in loader():
-                        merged[item.symbol.canonical] = item
-                except MarketDataError as exc:
-                    errors.append(exc)
-            if not merged:
-                if errors:
-                    raise errors[0]
-                raise MarketDataError(
-                    ErrorCode.NO_DATA,
-                    "No instruments are available in the provider catalog",
-                )
-            catalog = list(merged.values())
-            self._catalog_cache = (monotonic(), catalog)
-            return catalog
-
-    def _stock_bars(
-        self,
-        symbol: CanonicalSymbol,
-        start_date: date,
-        end_date: date,
-    ) -> list[DailyBar]:
+    def _stock_bars(self, symbol, start_date, end_date) -> list[DailyBar]:
         try:
-            frame = self.baostock.daily_bars(symbol, start_date, end_date)
-        except MarketDataError as exc:
-            if exc.code != ErrorCode.UPSTREAM_UNAVAILABLE:
-                raise
-            frame = self.akshare.stock_daily_bars(symbol)
-            return self._sina_bars(
-                frame,
-                symbol,
-                start_date,
-                end_date,
-                require_amount=True,
+            bars = self._baostock_bars(
+                self.baostock.daily_bars(symbol, start_date, end_date), symbol, start_date, end_date
             )
+            if bars:
+                return bars
+        except MarketDataError as exc:
+            if exc.code not in {ErrorCode.UPSTREAM_UNAVAILABLE, ErrorCode.TIMEOUT, ErrorCode.UPSTREAM_INVALID_RESPONSE}:
+                raise
+            log.warning("Stock daily fallback: symbol=%s code=%s", symbol.canonical, exc.code)
+        return self._sina_bars(self.akshare.stock_daily_bars(symbol), symbol, start_date, end_date, require_amount=True)
+
+    def _baostock_bars(self, frame, symbol, start_date, end_date) -> list[DailyBar]:
         if frame.empty:
             return []
         required = {"date", "open", "high", "low", "close", "preclose", "volume", "amount"}
         if not required.issubset(frame.columns):
-            raise MarketDataError(
-                ErrorCode.UPSTREAM_INVALID_RESPONSE,
-                f"BaoStock daily response missing fields for {symbol.canonical}",
-            )
+            raise MarketDataError(ErrorCode.UPSTREAM_INVALID_RESPONSE, "BaoStock daily response missing fields")
         rows: dict[date, dict[str, Any]] = {}
         for item in frame.to_dict("records"):
             if str(item.get("tradestatus", "1")).strip() != "1":
                 continue
             trade_date = _required_date(item["date"], "date")
-            rows[trade_date] = item
+            if start_date <= trade_date <= end_date:
+                rows[trade_date] = item
         bars: list[DailyBar] = []
         for trade_date in sorted(rows):
             item = rows[trade_date]
@@ -265,7 +254,7 @@ class MarketDataService:
         end_date: date,
     ) -> list[DailyBar]:
         frame = self.akshare.etf_daily_bars(symbol)
-        return self._sina_bars(frame, symbol, start_date, end_date, require_amount=True)
+        return self._sina_bars(frame, symbol, start_date, end_date, require_amount=False)
 
     def _index_bars(
         self,
@@ -314,7 +303,9 @@ class MarketDataService:
                         _required_decimal(item[columns["volume"]], "volume") / Decimal("100")
                     ),
                     amount_cny=_decimal_string(
-                        _required_decimal(item[columns["amount"]], "amount")
+                        (_optional_decimal(item[columns["amount"]], "amount") or Decimal("0"))
+                        if not require_amount and "amount" in columns
+                        else _required_decimal(item[columns["amount"]], "amount")
                         if "amount" in columns
                         else Decimal("0")
                     ),
@@ -367,8 +358,6 @@ def _resolve_columns(
         "volume": ("volume", "成交量"),
         "amount": ("amount", "成交额"),
     }
-    if not require_amount:
-        aliases.pop("amount")
     available = {str(column).strip().lower(): column for column in columns}
     resolved: dict[str, Any] = {}
     for field, names in aliases.items():
@@ -377,7 +366,7 @@ def _resolve_columns(
             if actual is not None:
                 resolved[field] = actual
                 break
-        if field not in resolved:
+        if field not in resolved and (field != "amount" or require_amount):
             raise MarketDataError(
                 ErrorCode.UPSTREAM_INVALID_RESPONSE,
                 f"AKShare Sina response missing field: {field}",
@@ -437,6 +426,8 @@ def _decimal_string(value: Decimal) -> str:
 
 
 def _required_date(value: Any, field: str) -> date:
+    if value is None or pd.isna(value):
+        raise MarketDataError(ErrorCode.UPSTREAM_INVALID_RESPONSE, f"Upstream response has an empty date field: {field}")
     if isinstance(value, datetime):
         return value.date()
     if isinstance(value, date):

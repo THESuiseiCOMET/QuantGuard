@@ -180,7 +180,7 @@ V1.3 仅支持 Python Provider，旧 Token 配置接口已移除；不需要任�
 
 BaoStock 与 AKShare 的成交量统一按 `volume / 100` 转换为 `volumeLots`，成交额以人民币元保存为 `amountCny`。新浪指数接口不提供成交额，因此指数日线当前使用 `0`。第一条可用日线没有前序收盘价时，昨收、涨跌额和涨跌幅保持为空。
 
-证券目录使用六小时进程内缓存。首次加载依赖上游网络，Python 服务重启后缓存会重新建立；如果首次加载前上游不可用，目录搜索会返回明确的服务不可用或超时错误。
+证券搜索使用 BaoStock 服务端筛选，指数补充目录与按需备用目录使用六小时缓存；完整六位代码或名称可查询，不完整数字代码不会触发全量下载。上游调用超时会回收工作进程并返回明确错误。
 
 先在 monorepo 的 `quant-guard-market-data-python` 目录启动单 worker 服务，再启动后端。Python 服务不访问 MySQL。
 
@@ -196,7 +196,7 @@ $env:MARKET_DATA_AUTO_SYNC_ENABLED="false" # Explicitly set true only to opt in
 
 - `MARKET_DATA_PROVIDER` 默认 `python`；
 - `PYTHON_MARKET_DATA_BASE_URL` 默认 `http://127.0.0.1:8001`；
-- Python 连接超时默认 3 秒，读取超时默认 30 秒；
+- Python 连接超时默认 3 秒，读取超时默认 60 秒；
 - `MARKET_DATA_DEFAULT_START_DATE` 默认 `1990-01-01`；
 - `MARKET_DATA_AUTO_SYNC_ENABLED` 默认 `false`；
 - `MARKET_DATA_AUTO_SYNC_CRON` 默认工作日 18:00；
@@ -642,7 +642,7 @@ Defaults:
 
 - `MARKET_DATA_PROVIDER` defaults to `python`.
 - `PYTHON_MARKET_DATA_BASE_URL` defaults to `http://127.0.0.1:8001`.
-- Python connect timeout defaults to 3 seconds and read timeout to 30 seconds.
+- Python connect timeout defaults to 3 seconds and read timeout to 60 seconds.
 - `MARKET_DATA_DEFAULT_START_DATE` defaults to `1990-01-01`.
 - `MARKET_DATA_AUTO_SYNC_ENABLED` defaults to `false`.
 - `MARKET_DATA_AUTO_SYNC_CRON` defaults to weekdays at 18:00.
@@ -898,3 +898,6 @@ The integration tests verify:
 - Long-term project progress is tracked in `docs/PROJECT_PROGRESS.md`.
 - Commit-safe local configuration belongs in example templates only.
 - Real passwords, tokens, private keys, logs, build artifacts, and local configuration files must not be committed.
+
+
+V1.3 行情可靠性、超时边界、首次同步范围与实际网络证据见 [阶段 B 记录](../docs/v1.3/MARKET_DATA_FIX.md)。

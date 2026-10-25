@@ -1,4 +1,5 @@
 from importlib.metadata import PackageNotFoundError, version
+import logging
 import ipaddress
 import os
 import secrets
@@ -8,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app import __version__
-from app.errors import ErrorCode
+from app.errors import ErrorCode, MarketDataError
 from app.models import (
     DailyBarsRequest,
     DailyBarsResponse,
@@ -95,8 +96,18 @@ async def validation_exception_handler(
     )
 
 
+@app.exception_handler(MarketDataError)
+async def market_data_exception_handler(_request: Request, exception: MarketDataError) -> JSONResponse:
+    logging.getLogger(__name__).warning("Market-data request failed: code=%s message=%s", exception.code, exception.message)
+    return JSONResponse(
+        status_code=504 if exception.code == ErrorCode.TIMEOUT else 503,
+        content={"code": exception.code.value, "message": exception.message},
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(_request: object, _exception: Exception) -> JSONResponse:
+    logging.getLogger(__name__).error("Unhandled market-data error", exc_info=_exception)
     return JSONResponse(
         status_code=500,
         content={

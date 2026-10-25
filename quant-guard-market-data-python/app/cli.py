@@ -1,3 +1,9 @@
+import multiprocessing
+
+# Required before importing the app when spawned from the PyInstaller executable.
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+
 import argparse
 import logging
 from pathlib import Path

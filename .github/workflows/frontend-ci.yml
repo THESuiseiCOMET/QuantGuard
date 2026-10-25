@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "release/**"
+      - "refactor/**"
   pull_request:
     branches:
       - main

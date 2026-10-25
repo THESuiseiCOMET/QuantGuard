@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - "release/**"
+      - "refactor/**"
       - "feature/**"
     paths:
       - "quant-guard-backend/**"

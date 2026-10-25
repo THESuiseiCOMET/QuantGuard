@@ -10,6 +10,7 @@ import pandas as pd
 
 from app.errors import ErrorCode, MarketDataError
 from app.symbols import CanonicalSymbol
+from app.upstream import bounded_upstream
 
 
 _BAOSTOCK_SESSION_LOCK = Lock()
@@ -31,11 +32,15 @@ class CatalogInstrument:
 
 
 class BaoStockClient:
+    def __init__(self, *, isolated: bool = True):
+        self._isolated = isolated
+
     _DAILY_FIELDS = (
         "date,code,open,high,low,close,preclose,volume,amount,"
         "adjustflag,tradestatus,pctChg"
     )
 
+    @bounded_upstream(timeout=8)
     def lookup_instrument(self, symbol: CanonicalSymbol) -> RawInstrumentMetadata:
         with _BAOSTOCK_SESSION_LOCK:
             self._ensure_available()
@@ -66,46 +71,44 @@ class BaoStockClient:
             finally:
                 bs.logout()
 
-    def list_instruments(self) -> list[CatalogInstrument]:
+    @bounded_upstream(timeout=8)
+    def search_instruments(self, query: str) -> list[CatalogInstrument]:
+        normalized = query.strip().upper()
+        if normalized[:6].isdigit():
+            suffixes = [normalized[7:].lower()] if len(normalized) == 9 else ["sh", "sz"]
+            queries = [{"code": f"{suffix}.{normalized[:6]}"} for suffix in suffixes]
+        else:
+            queries = [{"code_name": query}]
         with _BAOSTOCK_SESSION_LOCK:
             self._ensure_available()
             login_result = bs.login()
             try:
                 self._require_success(login_result, "BaoStock login failed", ErrorCode.UPSTREAM_UNAVAILABLE)
-                result = bs.query_stock_basic()
-                rows = self._read_rows(result, "BaoStock instrument catalog response is invalid")
-                instruments: list[CatalogInstrument] = []
-                for values in rows:
-                    row = dict(zip(result.fields, values, strict=True))
-                    instrument_type = (row.get("type") or "").strip()
-                    if instrument_type not in {"1", "2", "5"}:
-                        continue
-                    try:
-                        symbol = CanonicalSymbol.from_baostock_code(row.get("code") or "")
-                    except MarketDataError:
-                        continue
-                    instruments.append(
-                        CatalogInstrument(
-                            symbol=symbol,
-                            metadata=RawInstrumentMetadata(
-                                name=(row.get("code_name") or "").strip(),
-                                list_date=(row.get("ipoDate") or "").strip(),
-                                instrument_type=instrument_type,
-                                status=(row.get("status") or "").strip(),
-                            ),
-                        )
-                    )
+                instruments = []
+                for params in queries:
+                    result = bs.query_stock_basic(**params)
+                    for values in self._read_rows(result, "BaoStock instrument search response is invalid"):
+                        row = dict(zip(result.fields, values, strict=True))
+                        if row.get("type") not in {"1", "2", "5"}:
+                            continue
+                        try:
+                            symbol = CanonicalSymbol.from_baostock_code(row.get("code") or "")
+                        except MarketDataError:
+                            continue
+                        instruments.append(CatalogInstrument(symbol, RawInstrumentMetadata(
+                            name=(row.get("code_name") or "").strip(),
+                            list_date=(row.get("ipoDate") or "").strip(),
+                            instrument_type=row["type"], status=(row.get("status") or "").strip(),
+                        )))
                 return instruments
             except MarketDataError:
                 raise
             except Exception as exc:
-                raise MarketDataError(
-                    ErrorCode.UPSTREAM_UNAVAILABLE,
-                    "BaoStock instrument catalog query failed",
-                ) from exc
+                raise MarketDataError(ErrorCode.UPSTREAM_UNAVAILABLE, "BaoStock instrument search failed") from exc
             finally:
                 bs.logout()
 
+    @bounded_upstream(timeout=8)
     def daily_bars(
         self,
         symbol: CanonicalSymbol,
@@ -165,6 +168,10 @@ class BaoStockClient:
 
 
 class AkShareClient:
+    def __init__(self, *, isolated: bool = True):
+        self._isolated = isolated
+
+    @bounded_upstream(timeout=12)
     def stock_catalog(self) -> list[CatalogInstrument]:
         try:
             frame = ak.stock_info_a_code_name()
@@ -209,6 +216,21 @@ class AkShareClient:
             )
         return instruments
 
+    @bounded_upstream(timeout=12)
+    def etf_catalog(self) -> list[CatalogInstrument]:
+        try:
+            frame = ak.fund_etf_category_sina(symbol="ETF基金")
+            if not isinstance(frame, pd.DataFrame) or not {"代码", "名称"}.issubset(frame.columns):
+                raise MarketDataError(ErrorCode.UPSTREAM_INVALID_RESPONSE, "Invalid AKShare ETF catalog response")
+            return [CatalogInstrument(CanonicalSymbol.from_sina_code(str(row["代码"])),
+                        RawInstrumentMetadata(str(row["名称"]), "", "5", "1"))
+                    for row in frame.to_dict("records")]
+        except MarketDataError:
+            raise
+        except Exception as exc:
+            raise MarketDataError(ErrorCode.UPSTREAM_UNAVAILABLE, "AKShare ETF catalog query failed") from exc
+
+    @bounded_upstream(timeout=12)
     def stock_daily_bars(self, symbol: CanonicalSymbol) -> pd.DataFrame:
         try:
             frame = ak.stock_zh_a_daily(symbol=symbol.sina_code, adjust="")
@@ -224,6 +246,7 @@ class AkShareClient:
             )
         return frame
 
+    @bounded_upstream(timeout=12)
     def etf_daily_bars(self, symbol: CanonicalSymbol) -> pd.DataFrame:
         try:
             frame = ak.fund_etf_hist_sina(symbol=symbol.sina_code)
@@ -239,6 +262,7 @@ class AkShareClient:
             )
         return frame
 
+    @bounded_upstream(timeout=12)
     def index_catalog(self) -> list[CatalogInstrument]:
         try:
             frame = ak.stock_zh_index_spot_sina()
@@ -271,6 +295,7 @@ class AkShareClient:
             )
         return instruments
 
+    @bounded_upstream(timeout=12)
     def index_daily_bars(self, symbol: CanonicalSymbol) -> pd.DataFrame:
         try:
             frame = ak.stock_zh_index_daily(symbol=symbol.sina_code)

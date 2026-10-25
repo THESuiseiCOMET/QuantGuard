@@ -33,7 +33,7 @@ class FakeBaoStock:
             )
         return self.metadata[symbol.canonical]
 
-    def list_instruments(self):
+    def search_instruments(self, _query):
         return [
             CatalogInstrument(CanonicalSymbol.parse(symbol), item)
             for symbol, item in self.metadata.items()
@@ -463,3 +463,57 @@ def test_unknown_type_cannot_fetch_daily_bars() -> None:
     )
 
     assert response.results[0].error.code == ErrorCode.UNSUPPORTED_INSTRUMENT_TYPE
+
+
+def test_successful_primary_catalog_does_not_fetch_redundant_stock_fallback() -> None:
+    class SlowFallback(FakeAkShare):
+        def stock_catalog(self):
+            raise AssertionError("Primary stocks are present: do not call the slow fallback")
+
+    primary = metadata("1", "Primary name")
+    duplicate = CatalogInstrument(CanonicalSymbol.parse("600519.SH"), metadata("1", "Fallback name"))
+    service = MarketDataService(FakeBaoStock({"600519.SH": primary}), SlowFallback(indices=[duplicate]))
+    result = service.search_instruments("600519", 20).results[0]
+    assert result.name == "Primary name"
+    assert result.list_date == date(2020, 1, 2)
+
+
+def test_etf_missing_or_empty_amount_does_not_discard_valid_bars() -> None:
+    for amount in [{}, {"amount": None}, {"amount": ""}, {"amount": "123.45"}]:
+        frame = pd.DataFrame([dict(date="2026-01-02", open="1", high="2", low="1", close="2", volume="100", **amount)])
+        service = MarketDataService(FakeBaoStock({"510300.SH": metadata("5")}), FakeAkShare({"510300.SH": frame}))
+        bar = service.daily_bars(["510300.SH"], date(2026, 1, 2), date(2026, 1, 2)).results[0].bars[0]
+        assert bar.amount_cny == ("123.45" if amount.get("amount") else "0")
+        assert bar.volume_lots == "1"
+
+
+def test_stock_fallback_handles_timeout_empty_and_malformed_primary() -> None:
+    fallback = pd.DataFrame([dict(date="2026-01-02", open="1", high="2", low="1", close="2", volume="100", amount="200")])
+    for primary in [pd.DataFrame(), pd.DataFrame([{"date": "2026-01-02"}]),
+                    pd.DataFrame([dict(date="2026-01-02", open="bad", high="2", low="1", close="2", preclose="1", volume="100", amount="200")])]:
+        service = MarketDataService(FakeBaoStock({"600519.SH": metadata("1")}, {"600519.SH": primary}), FakeAkShare({"600519.SH": fallback}))
+        assert service.daily_bars(["600519.SH"], date(2026, 1, 2), date(2026, 1, 2)).status == "SUCCESS"
+    service = MarketDataService(FakeBaoStock({"600519.SH": metadata("1")}, daily_failures={"600519.SH": MarketDataError(ErrorCode.TIMEOUT, "timed out")}), FakeAkShare({"600519.SH": fallback}))
+    assert service.daily_bars(["600519.SH"], date(2026, 1, 2), date(2026, 1, 2)).status == "SUCCESS"
+
+
+def test_baostock_rows_outside_requested_range_are_not_returned() -> None:
+    frame = pd.DataFrame([dict(date=day, open="1", high="2", low="1", close="2", preclose="1", volume="100", amount="200") for day in ["2026-01-01", "2026-01-02", "2026-01-03"]])
+    service = MarketDataService(FakeBaoStock({"600519.SH": metadata("1")}, {"600519.SH": frame}), FakeAkShare())
+    bars = service.daily_bars(["600519.SH"], date(2026, 1, 2), date(2026, 1, 2)).results[0].bars
+    assert [bar.trade_date for bar in bars] == [date(2026, 1, 2)]
+
+
+def test_partial_numeric_code_does_not_download_catalog() -> None:
+    class NoQueries:
+        def __getattr__(self, name):
+            raise AssertionError("Incomplete code must not start a network request")
+    service = MarketDataService(NoQueries(), NoQueries())
+    assert service.search_instruments("600", 20).results == []
+
+
+def test_invalid_date_is_a_structured_error() -> None:
+    frame = pd.DataFrame([dict(date=pd.NaT, open="1", high="2", low="1", close="2", volume="100")])
+    service = MarketDataService(FakeBaoStock({"510300.SH": metadata("5")}), FakeAkShare({"510300.SH": frame}))
+    result = service.daily_bars(["510300.SH"], date(2026, 1, 1), date(2026, 1, 2)).results[0]
+    assert result.error.code == ErrorCode.UPSTREAM_INVALID_RESPONSE

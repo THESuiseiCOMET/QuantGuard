@@ -13,7 +13,7 @@ import type {
   InstrumentImportResult,
 } from '@/types/marketData'
 
-const CATALOG_REQUEST_TIMEOUT_MS = 30_000
+const CATALOG_REQUEST_TIMEOUT_MS = 65_000
 const MARKET_DATA_OPERATION_TIMEOUT_MS = 120_000
 
 export function searchInstrumentCatalog(query: string, limit = 20) {

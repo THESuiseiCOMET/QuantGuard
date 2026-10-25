@@ -12,6 +12,8 @@ public class MarketDataProperties {
 
     private LocalDate defaultStartDate = LocalDate.of(1990, 1, 1);
 
+    private int initialLookbackYears = 1;
+
     private boolean autoSyncEnabled = false;
 
     private String autoSyncCron = "0 0 18 * * MON-FRI";
@@ -34,6 +36,17 @@ public class MarketDataProperties {
 
     public void setDefaultStartDate(LocalDate defaultStartDate) {
         this.defaultStartDate = defaultStartDate;
+    }
+
+    public int getInitialLookbackYears() {
+        return initialLookbackYears;
+    }
+
+    public void setInitialLookbackYears(int initialLookbackYears) {
+        if (initialLookbackYears < 1 || initialLookbackYears > 30) {
+            throw new IllegalArgumentException("initial-lookback-years must be between 1 and 30");
+        }
+        this.initialLookbackYears = initialLookbackYears;
     }
 
     public boolean isAutoSyncEnabled() {
@@ -74,7 +87,7 @@ public class MarketDataProperties {
 
         private Duration connectTimeout = Duration.ofSeconds(3);
 
-        private Duration readTimeout = Duration.ofSeconds(30);
+        private Duration readTimeout = Duration.ofSeconds(60);
 
         public String getBaseUrl() {
             return baseUrl;

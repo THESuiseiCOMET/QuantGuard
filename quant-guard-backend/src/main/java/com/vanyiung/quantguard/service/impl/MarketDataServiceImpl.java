@@ -218,7 +218,7 @@ public class MarketDataServiceImpl implements MarketDataService {
 
         DailyPriceSyncResult syncResult = null;
         if (syncDailyPrices) {
-            LocalDate startDate = requestedStartDate == null ? properties.getDefaultStartDate() : requestedStartDate;
+            LocalDate startDate = requestedStartDate == null ? initialSyncStartDate(currentChinaDate()) : requestedStartDate;
             if (metadata.listDate() != null && metadata.listDate().isAfter(startDate)) {
                 startDate = metadata.listDate();
             }
@@ -456,7 +456,12 @@ public class MarketDataServiceImpl implements MarketDataService {
         if (latest != null) {
             return latest.plusDays(1);
         }
-        return properties.getDefaultStartDate();
+        return initialSyncStartDate(endDate);
+    }
+
+    private LocalDate initialSyncStartDate(LocalDate endDate) {
+        LocalDate recent = endDate.minusYears(properties.getInitialLookbackYears());
+        return recent.isAfter(properties.getDefaultStartDate()) ? recent : properties.getDefaultStartDate();
     }
 
     private boolean isIncrementalNoData(Long instrumentId, DailyPriceSyncRequest request, Exception exception) {

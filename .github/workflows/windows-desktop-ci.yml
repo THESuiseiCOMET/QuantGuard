@@ -84,6 +84,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             quant-guard-market-data-python/requirements.txt
+            quant-guard-market-data-python/requirements-test.txt
             quant-guard-market-data-python/requirements-build.txt
 
       - name: Set up Java 21

@@ -117,7 +117,7 @@ Push-Location $pythonRoot
 try {
     Invoke-Checked 'Python dependency installation' {
         & $pythonExe -m pip install --disable-pip-version-check `
-            -r requirements.txt `
+            -r requirements-test.txt `
             -r requirements-build.txt
     }
 } finally {

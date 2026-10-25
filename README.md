@@ -209,6 +209,7 @@ V1.2-D 使用统一脚本构建未签名 Windows 发布候选包：
 
 ```powershell
 .\quant-guard-market-data-python\.venv\Scripts\python.exe -m pip install `
+  -r .\quant-guard-market-data-python\requirements-test.txt `
   -r .\quant-guard-market-data-python\requirements-build.txt
 .\scripts\build-desktop-runtimes.ps1
 ```
@@ -242,3 +243,6 @@ V1.3 开发任务、验证记录和会话恢复说明见 [任务交接](docs/V1.
 
 
 V1.3 行情可靠性、超时边界、首次同步范围与实际网络证据见 [阶段 B 记录](docs/v1.3/MARKET_DATA_FIX.md)。
+
+
+V1.3 源码精简、依赖分离、日志限额与验证结果见 [精简记录](docs/v1.3/SIMPLIFICATION.md)。安装包和自包含运行时构建当前按用户要求暂停；源码验证与预览可继续使用。

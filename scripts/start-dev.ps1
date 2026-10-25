@@ -142,7 +142,7 @@ try {
     Start-ManagedCommand 'backend' 8080 $backendCommand $backendDir
     Wait-HttpEndpoint 'Spring Boot backend' 'http://127.0.0.1:8080/api/health' 90
 
-    $frontendCommand = "& npm.cmd run dev -- --host 127.0.0.1 --port 5173 --strictPort"
+    $frontendCommand = "`$env:CI='true'; & npm.cmd run dev -- --host 127.0.0.1 --port 5173 --strictPort"
     Start-ManagedCommand 'frontend' 5173 $frontendCommand $frontendDir
     Wait-HttpEndpoint 'Vue frontend' 'http://127.0.0.1:5173/' 60
 

@@ -52,6 +52,7 @@ jobs:
           cache: pip
           cache-dependency-path: |
             quant-guard-market-data-python/requirements.txt
+            quant-guard-market-data-python/requirements-test.txt
             quant-guard-market-data-python/requirements-build.txt
 
       - name: Set up Java 21
@@ -68,7 +69,7 @@ jobs:
           python -m venv quant-guard-market-data-python/.venv
           & quant-guard-market-data-python/.venv/Scripts/python.exe -m pip install --upgrade pip
           & quant-guard-market-data-python/.venv/Scripts/python.exe -m pip install `
-            -r quant-guard-market-data-python/requirements.txt `
+            -r quant-guard-market-data-python/requirements-test.txt `
             -r quant-guard-market-data-python/requirements-build.txt
 
       - name: Build and test self-contained runtimes

@@ -897,3 +897,6 @@ The integration tests verify:
 
 
 V1.3 行情可靠性、超时边界、首次同步范围与实际网络证据见 [阶段 B 记录](../docs/v1.3/MARKET_DATA_FIX.md)。
+
+
+V1.3 源码精简、依赖分离、日志限额与验证结果见 [精简记录](../docs/v1.3/SIMPLIFICATION.md)。安装包和自包含运行时构建当前按用户要求暂停；源码验证与预览可继续使用。

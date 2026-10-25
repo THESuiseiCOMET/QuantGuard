@@ -57,9 +57,10 @@ Canonical symbols use `XXXXXX.SH` or `XXXXXX.SZ`.
 
 ## Tests
 
-Default tests mock all upstream calls:
+Runtime dependencies are in `requirements.txt`; pytest and the TestClient HTTP dependency are isolated in `requirements-test.txt`. Default tests mock all upstream calls:
 
 ```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-test.txt
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m compileall app
 ```
@@ -76,7 +77,7 @@ $env:RUN_MARKET_DATA_SMOKE="1"
 Install the locked build-only dependency into the existing virtual environment:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-build.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements-test.txt -r requirements-build.txt
 ```
 
 Build from the monorepo root:
@@ -106,3 +107,6 @@ Stock daily bars fall back to AKShare on timeout, unavailable/malformed response
 Java's default Python read timeout is 60 seconds, and the frontend catalog timeout is 65 seconds. Individual upstream operations time out first. Initial implicit sync/import now requests one year (`MARKET_DATA_INITIAL_LOOKBACK_YEARS`, valid 1–30), clamped to the historical floor/listing date; explicit start dates and full refresh remain available. Automatic sync is still disabled by default.
 
 Python errors preserve TIMEOUT/availability codes and log the source failure. Real-network tests remain opt-in and now include an index plus cold-start search. The retained BaoStock version is 0.9.3: inspecting 0.9.4 showed API-key/VIP changes, not a timeout fix, so no blind dependency upgrade was made.
+
+
+V1.3 源码精简、依赖分离、日志限额与验证结果见 [精简记录](../docs/v1.3/SIMPLIFICATION.md)。安装包和自包含运行时构建当前按用户要求暂停；源码验证与预览可继续使用。

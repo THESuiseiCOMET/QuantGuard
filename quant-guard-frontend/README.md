@@ -317,3 +317,6 @@ Not implemented yet:
 Note: QuantGuard uses user-entered limit prices for local simulated fills, does not connect to live market matching, does not connect to real brokers, and does not place real securities orders. `maxPositionRatio` is currently stored only. The backend does not yet enforce maximum position ratio checks.
 
 Historical market data comes from an external provider. The latest daily close is not a real-time trade price; market data may be delayed, missing, or corrected. QuantGuard does not provide investment advice.
+
+
+V1.3 源码精简、依赖分离、日志限额与验证结果见 [精简记录](../docs/v1.3/SIMPLIFICATION.md)。安装包和自包含运行时构建当前按用户要求暂停；源码验证与预览可继续使用。

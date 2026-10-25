@@ -1,0 +1,69 @@
+{
+  "date": "2026-10-26",
+  "java": {
+    "tests": 175,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "python_offline_passed": 38,
+  "live_passed": 6,
+  "frontend_e2e_passed": 9,
+  "native_log_tests_passed": 4,
+  "native_source_check": "success",
+  "native_source_commit": "b556912",
+  "size": {
+    "frontend_js_before_bytes": 1792455,
+    "frontend_js_after_bytes": 1374773,
+    "largest_js_before_bytes": 1777202,
+    "largest_js_after_bytes": 643153,
+    "python_duplicate_data": [
+      {
+        "package": "akshare",
+        "removed_files": 405,
+        "removed_bytes": 3585553
+      },
+      {
+        "package": "baostock",
+        "removed_files": 56,
+        "removed_bytes": 180547
+      },
+      {
+        "package": "py_mini_racer",
+        "removed_files": 10,
+        "removed_bytes": 66724
+      }
+    ]
+  },
+  "market_chain": [
+    {
+      "symbol": "600519.SH",
+      "instrument_id": 33,
+      "search_seconds": 1.406,
+      "sync_seconds": 0.844,
+      "received": 5,
+      "stored_rows": 5,
+      "status": "SUCCESS"
+    },
+    {
+      "symbol": "510300.SH",
+      "instrument_id": 34,
+      "search_seconds": 0.843,
+      "sync_seconds": 2.437,
+      "received": 5,
+      "stored_rows": 5,
+      "status": "SUCCESS"
+    },
+    {
+      "symbol": "000001.SH",
+      "instrument_id": 35,
+      "search_seconds": 13.094,
+      "sync_seconds": 2.547,
+      "received": 5,
+      "stored_rows": 5,
+      "status": "SUCCESS"
+    }
+  ],
+  "installer_build": "deferred_by_user",
+  "runtime_bundle_build": "deferred_by_user"
+}

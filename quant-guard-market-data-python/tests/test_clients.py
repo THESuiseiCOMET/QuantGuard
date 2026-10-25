@@ -14,7 +14,6 @@ def test_baostock_logout_runs_when_query_fails(monkeypatch) -> None:
     logout_calls: list[bool] = []
 
     monkeypatch.setattr("app.clients.bs.login", lambda: SuccessfulLogin())
-    monkeypatch.setattr(BaoStockClient, "_ensure_available", lambda _self: None)
     monkeypatch.setattr(
         "app.clients.bs.query_stock_basic",
         lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("upstream failed")),
@@ -28,17 +27,11 @@ def test_baostock_logout_runs_when_query_fails(monkeypatch) -> None:
     assert logout_calls == [True]
 
 
-def test_baostock_unreachable_fails_before_login(monkeypatch) -> None:
-    login_calls: list[bool] = []
-
-    monkeypatch.setattr(
-        "app.clients.socket.create_connection",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(TimeoutError("unreachable")),
-    )
-    monkeypatch.setattr("app.clients.bs.login", lambda: login_calls.append(True))
-
+def test_baostock_login_timeout_is_structured_without_logout(monkeypatch) -> None:
+    logout_calls = []
+    monkeypatch.setattr("app.clients.bs.login", lambda: (_ for _ in ()).throw(TimeoutError("unreachable")))
+    monkeypatch.setattr("app.clients.bs.logout", lambda: logout_calls.append(True))
     with pytest.raises(MarketDataError) as error:
         BaoStockClient(isolated=False).lookup_instrument(CanonicalSymbol.parse("600519.SH"))
-
-    assert error.value.code == ErrorCode.UPSTREAM_UNAVAILABLE
-    assert login_calls == []
+    assert error.value.code == ErrorCode.TIMEOUT
+    assert logout_calls == []

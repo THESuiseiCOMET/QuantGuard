@@ -41,12 +41,15 @@ concurrency:
 
 jobs:
   source-checks:
+    timeout-minutes: 20
     if: startsWith(github.ref, 'refs/heads/refactor/')
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - name: Verify rotating logs without building installers
         shell: pwsh
+        env:
+          TAURI_CONFIG: '{"bundle":{"active":false,"resources":null}}'
         run: |
           rustc -V
           rustc --edition=2024 --test quant-guard-frontend/src-tauri/src/rotating_log.rs -o "$env:RUNNER_TEMP/quantguard-log-tests.exe"
@@ -54,6 +57,8 @@ jobs:
           & "$env:RUNNER_TEMP/quantguard-log-tests.exe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo fmt --manifest-path quant-guard-frontend/src-tauri/Cargo.toml --all -- --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo check --locked --manifest-path quant-guard-frontend/src-tauri/Cargo.toml --all-targets
 
   build:
     # Refactor branches run source checks; packaging is deferred by user request.

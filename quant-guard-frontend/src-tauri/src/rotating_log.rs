@@ -14,29 +14,50 @@ pub(crate) struct RotatingLog {
 impl RotatingLog {
     pub(crate) fn open(path: PathBuf, limit: u64, backups: usize) -> io::Result<Self> {
         if limit == 0 || backups == 0 {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid log limits"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid log limits",
+            ));
         }
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
         // Older versions appended forever. Retain only the tail of oversized logs.
         for index in 0..=backups {
-            let candidate = if index == 0 { path.clone() } else { backup_path(&path, index) };
+            let candidate = if index == 0 {
+                path.clone()
+            } else {
+                backup_path(&path, index)
+            };
             trim_tail(&candidate, limit)?;
         }
         let file = OpenOptions::new().create(true).append(true).open(&path)?;
         let size = file.metadata()?.len();
-        Ok(Self { path, file: Some(file), size, limit, backups })
+        Ok(Self {
+            path,
+            file: Some(file),
+            size,
+            limit,
+            backups,
+        })
     }
 
     fn rotate(&mut self) -> io::Result<()> {
         self.file.take();
         remove_if_present(&backup_path(&self.path, self.backups))?;
         for index in (1..self.backups).rev() {
-            rename_if_present(&backup_path(&self.path, index), &backup_path(&self.path, index + 1))?;
+            rename_if_present(
+                &backup_path(&self.path, index),
+                &backup_path(&self.path, index + 1),
+            )?;
         }
         rename_if_present(&self.path, &backup_path(&self.path, 1))?;
-        self.file = Some(OpenOptions::new().create(true).append(true).open(&self.path)?);
+        self.file = Some(
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&self.path)?,
+        );
         self.size = 0;
         Ok(())
     }
@@ -50,7 +71,10 @@ impl Write for RotatingLog {
                 self.rotate()?;
             }
             let count = bytes.len().min((self.limit - self.size) as usize);
-            let file = self.file.as_mut().ok_or_else(|| io::Error::other("log is closed"))?;
+            let file = self
+                .file
+                .as_mut()
+                .ok_or_else(|| io::Error::other("log is closed"))?;
             file.write_all(&bytes[..count])?;
             self.size += count as u64;
             bytes = &bytes[count..];
@@ -104,7 +128,10 @@ fn rename_if_present(from: &Path, to: &Path) -> io::Result<()> {
     }
 }
 
-pub(crate) fn drain_log(reader: impl Read + Send + 'static, mut log: RotatingLog) -> JoinHandle<()> {
+pub(crate) fn drain_log(
+    reader: impl Read + Send + 'static,
+    mut log: RotatingLog,
+) -> JoinHandle<()> {
     thread::spawn(move || {
         let mut reader = reader;
         let mut buffer = [0; 8192];
@@ -132,8 +159,14 @@ mod tests {
 
     impl Directory {
         fn new() -> Self {
-            let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-            let path = std::env::temp_dir().join(format!("quantguard-log-test-{}-{nonce}", std::process::id()));
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "quantguard-log-test-{}-{nonce}",
+                std::process::id()
+            ));
             fs::create_dir(&path).unwrap();
             Self(path)
         }
@@ -178,7 +211,9 @@ mod tests {
         let dir = Directory::new();
         let path = dir.0.join("market-data.err.log");
         let log = RotatingLog::open(path.clone(), 5, 2).unwrap();
-        drain_log(Cursor::new(b"12345678901".to_vec()), log).join().unwrap();
+        drain_log(Cursor::new(b"12345678901".to_vec()), log)
+            .join()
+            .unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"1");
         assert_eq!(fs::read(backup_path(&path, 1)).unwrap(), b"67890");
         assert_eq!(fs::read(backup_path(&path, 2)).unwrap(), b"12345");

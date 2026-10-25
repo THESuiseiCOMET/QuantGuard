@@ -41,6 +41,8 @@ concurrency:
 
 jobs:
   build:
+    # Refactor branches run source checks; packaging is deferred by user request.
+    if: ${{ !startsWith(github.ref, 'refs/heads/refactor/') }}
     runs-on: windows-latest
     timeout-minutes: 90
 
